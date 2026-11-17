@@ -1,0 +1,70 @@
+name: release-linux
+
+# Builds the Linux .deb and AppImage for a tag and attaches them to the GitHub Release that
+# release.yml creates from the macOS build. Its own workflow, so release.yml stays as it is;
+# it waits for that release to exist, then uploads with its own SHA256SUMS-linux.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: System libraries (WebKitGTK for Tauri, D-Bus for the Secret Service keyring)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config file patchelf libfuse2 xdg-utils \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add x86_64-unknown-linux-gnu
+      - run: npm ci
+      - name: Tag matches the app version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(node -p 'require("./src-tauri/tauri.conf.json").version')"
+          test "v${version}" = "${TAG}" || { echo "tag ${TAG} does not match tauri.conf.json ${version}" >&2; exit 1; }
+      - run: scripts/build-linux.sh
+      - name: Collect the .deb and the AppImage and write checksums
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          bundle=src-tauri/target/x86_64-unknown-linux-gnu/release/bundle
+          mkdir -p dist
+          cp "$bundle"/deb/*.deb "dist/QuorumCompanion-${version}-linux-x64.deb"
+          cp "$bundle"/appimage/*.AppImage "dist/QuorumCompanion-${version}-linux-x64.AppImage"
+          (cd dist && sha256sum * > SHA256SUMS-linux)
+          cat dist/SHA256SUMS-linux
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 90); do
+            if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+              gh release upload "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+              exit 0
+            fi
+            echo "waiting for release.yml to create the release ${GITHUB_REF_NAME}"
+            sleep 60
+          done
+          echo "the release ${GITHUB_REF_NAME} did not appear within 90 minutes" >&2
+          exit 1

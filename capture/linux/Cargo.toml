@@ -1,0 +1,19 @@
+[package]
+name = "quorum-capture"
+version = "0.1.0"
+description = "Linux capture module of the Quorum companion: PipeWire per-node capture of the meeting app and the default source as 16 kHz mono PCM frames on stdout"
+license = "Apache-2.0"
+repository = "https://github.com/hivecommons/quorum-companion"
+edition = "2021"
+rust-version = "1.80"
+
+[dependencies]
+serde_json = "1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

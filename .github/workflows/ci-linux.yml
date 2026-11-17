@@ -1,0 +1,76 @@
+name: ci-linux
+
+# Linux build, in its own workflow so it stays independent of the macOS (and Windows) jobs in
+# ci.yml.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    # The oldest supported Ubuntu LTS runner, so the AppImage runs on older glibc too.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: System libraries (WebKitGTK for Tauri, D-Bus for the Secret Service keyring)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config file patchelf libfuse2 xdg-utils \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+          rustup target add x86_64-unknown-linux-gnu
+      - run: npm ci
+      - name: Capture helper, icons and app bundles (.deb, AppImage)
+        run: scripts/build-linux.sh
+      - name: Rust format, lint and tests (capture helper)
+        working-directory: capture/linux
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+      - name: Rust format, lint and tests (app)
+        working-directory: src-tauri
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+      - name: Check the bundles
+        run: |
+          set -euo pipefail
+          bundle=src-tauri/target/x86_64-unknown-linux-gnu/release/bundle
+          deb="$(ls "$bundle"/deb/*.deb)"
+          ls "$bundle"/appimage/*.AppImage
+          dpkg-deb -c "$deb" > /tmp/deb-contents.txt
+          grep -q 'usr/bin/quorum-capture$' /tmp/deb-contents.txt
+          dpkg-deb -f "$deb" Depends > /tmp/deb-depends.txt
+          cat /tmp/deb-depends.txt >&2
+          grep -q pipewire-bin /tmp/deb-depends.txt
+          helper=capture/linux/target/x86_64-unknown-linux-gnu/release/quorum-capture
+          # No PipeWire on the runner: list still prints one JSON array.
+          "$helper" list < /dev/null | python3 -c 'import json, sys; assert isinstance(json.load(sys.stdin), list)'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quorum-companion-linux-x64
+          path: |
+            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+          retention-days: 14

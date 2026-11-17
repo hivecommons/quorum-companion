@@ -47,6 +47,16 @@ On Windows the app id the companion shows and passes to the capture helper is th
 
 CI builds every pull request on macOS (`scripts/build-macos.sh`: the Swift capture helper with `swiftc`, the icons, then `tauri build`) and uploads the `.dmg`, and on Windows (`scripts/build-windows.sh`: the Rust capture helper in `capture/windows`, the icons, then `tauri build --bundles msi`) and uploads the `.msi`. The Windows helper's pure logic (resampler, PCM conversion, process-tree selection, call detection) is unit-tested on both runners with `cargo test` in `capture/windows`. Tags `v*` publish a release with the macOS `.dmg`/`.zip`, the Windows `.msi`/`.zip` and `SHA256SUMS`.
 
+## Linux (prototype)
+
+Status: **prototype, not yet verified on a real call** (x86_64; any desktop running PipeWire with WirePlumber, e.g. Ubuntu 22.10+, Debian 12+, Fedora 34+). The window, the consent prompt, the "Betty is listening" indicator, **Copy notice** and **Stop** are the same as on macOS.
+
+- Install the `.deb` from [Releases](https://github.com/hivecommons/quorum-companion/releases) (`sudo apt install ./QuorumCompanion-X.Y.Z-linux-x64.deb`, which pulls in `pipewire-bin` and `pulseaudio-utils`), or make the AppImage executable and run it (it needs `pw-dump`, `pw-record` and, for the fallback, `parec` and `pactl` from the system).
+- Call audio: the companion records **only the meeting app's own output stream** (PipeWire per-node capture: `pw-record --target <the app's stream node>`), never the whole speaker mix and with no virtual device. Where `pw-record` cannot do that (an older PipeWire such as 0.3.48, or a session manager that refuses the link) it records the same stream through pipewire-pulse (`parec --monitor-stream=<the app's sink-input>`). The microphone is the default source.
+- Call detection: a meeting app (Zoom, Teams for Linux, Slack, Webex, Chrome, Chromium, Edge, Brave, Firefox, Vivaldi) has a running PipeWire recording stream, i.e. it uses the microphone. The app id the window shows is the executable name (`zoom`, `teams-for-linux`, `chrome`, ...).
+- The companion token is kept in the **Secret Service** keyring (GNOME Keyring, KWallet with its Secret Service enabled, or KeePassXC), one entry per hive URL under the service `dev.hivecommons.quorum-companion`. Without a Secret Service provider (some minimal window-manager setups), saving the token fails with an error; install and unlock one (for example `gnome-keyring`) first. Settings are in `~/.config/dev.hivecommons.quorum-companion/`.
+- CI builds the `.deb` and the AppImage on Ubuntu 22.04 (`scripts/build-linux.sh`: the Rust helper in `capture/linux`, the icons, then `tauri build --bundles deb,appimage`) and unit-tests the helper's platform-independent logic (resampler, framing, app lookup, stream choice, detection). Design notes: [docs/design.md](docs/design.md#linux-capture-module).
+
 ## License
 
 Apache-2.0. Every commit needs a DCO sign-off (`git commit -s`); see [CONTRIBUTING.md](CONTRIBUTING.md).
