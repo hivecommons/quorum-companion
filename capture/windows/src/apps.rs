@@ -185,7 +185,7 @@ impl Detector {
             }
             *misses += 1;
             if *misses >= misses_to_end {
-                events.push(CallEvent::Ended { exe, app: app });
+                events.push(CallEvent::Ended { exe, app });
                 return false;
             }
             true
