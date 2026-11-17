@@ -30,11 +30,10 @@ use windows::Win32::Media::Audio::{
     DEVICE_STATE_ACTIVE, PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
     VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, WAVEFORMATEX,
 };
-use windows::Win32::System::Com::StructuredStorage::{
-    PROPVARIANT, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0,
-};
+use windows::core::imp::{BLOB, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0};
+use windows::core::PROPVARIANT;
 use windows::Win32::System::Com::{
-    CoCreateInstance, CoInitializeEx, CoTaskMemFree, BLOB, CLSCTX_ALL, COINIT_MULTITHREADED,
+    CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_ALL, COINIT_MULTITHREADED,
 };
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
@@ -217,10 +216,11 @@ fn process_loopback_client(pid: u32) -> Result<IAudioClient> {
     };
     // A VT_BLOB PROPVARIANT pointing at `params`; ManuallyDrop because the blob is ours, not
     // CoTaskMem memory PropVariantClear could free.
-    let prop = ManuallyDrop::new(PROPVARIANT {
+    let prop = ManuallyDrop::new(unsafe {
+        PROPVARIANT::from_raw(windows::core::imp::PROPVARIANT {
         Anonymous: PROPVARIANT_0 {
-            Anonymous: ManuallyDrop::new(PROPVARIANT_0_0 {
-                vt: VT_BLOB,
+            Anonymous: PROPVARIANT_0_0 {
+                vt: VT_BLOB.0 as u16,
                 wReserved1: 0,
                 wReserved2: 0,
                 wReserved3: 0,
@@ -230,8 +230,9 @@ fn process_loopback_client(pid: u32) -> Result<IAudioClient> {
                         pBlobData: &mut params as *mut AUDIOCLIENT_ACTIVATION_PARAMS as *mut u8,
                     },
                 },
-            }),
+            },
         },
+        })
     });
     let state = Arc::new((Mutex::new(false), Condvar::new()));
     let handler: IActivateAudioInterfaceCompletionHandler = Activated(state.clone()).into();
