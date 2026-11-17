@@ -105,11 +105,15 @@ jobs:
           retention-days: 7
 
   publish:
+    # macOS is the first-priority platform: publish whenever it succeeded, even if
+    # the experimental Windows job failed (that job still shows as failed on the run).
     needs: [macos, windows]
+    if: always() && needs.macos.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
+      # pattern download: a missing release-windows artifact (failed windows job) is not an error
       - uses: actions/download-artifact@v4
         with:
           pattern: release-*
@@ -125,4 +129,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" \
-            --notes "macOS (Apple silicon, 14.2+): ad-hoc signed, on first launch use System Settings, Privacy & Security, Open Anyway. Windows (x64, Windows 10 2004+): unsigned .msi or portable .zip, SmartScreen asks once (More info, Run anyway). See the README for the permissions each asks for."
+            --notes "macOS (Apple silicon, 14.2+): ad-hoc signed, on first launch use System Settings, Privacy & Security, Open Anyway. Windows (x64, Windows 10 2004+): unsigned .msi or portable .zip, SmartScreen asks once (More info, Run anyway). See the README for the permissions each asks for. EXPERIMENTAL: the Windows and Linux builds are prototypes that have not yet been verified on a real call; expect problems, and use macOS for real meetings. The Windows assets are only attached when the Windows build succeeded."
