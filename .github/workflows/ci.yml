@@ -37,6 +37,9 @@ jobs:
           cargo fmt --check
           cargo clippy --all-targets -- -D warnings
           cargo test
+      - name: Windows capture module logic tests (platform-independent parts)
+        working-directory: capture/windows
+        run: cargo test
       - name: Check the bundle
         run: |
           app="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Quorum Companion.app"
@@ -50,4 +53,50 @@ jobs:
         with:
           name: quorum-companion-macos-arm64
           path: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          retention-days: 14
+
+  windows:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+          rustup target add x86_64-pc-windows-msvc
+      - run: npm ci
+      - name: Capture helper, icons and app bundle (unsigned .msi)
+        run: scripts/build-windows.sh
+      - name: Rust format, lint and tests (capture helper)
+        working-directory: capture/windows
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+      - name: Rust format, lint and tests (app)
+        working-directory: src-tauri
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+      - name: Check the bundle
+        run: |
+          release=src-tauri/target/x86_64-pc-windows-msvc/release
+          ls "$release"/bundle/msi/*.msi
+          test -f "$release/quorum-companion.exe"
+          helper=capture/windows/target/x86_64-pc-windows-msvc/release/quorum-capture.exe
+          "$helper" list < /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quorum-companion-windows-x64
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
           retention-days: 14

@@ -6,16 +6,16 @@ It is how Betty works on Zoom without a Zoom app or bot (Zoom does not allow aut
 
 Design and comparison: [hivecommons/hive#18596](https://github.com/hivecommons/hive/issues/18596). Streaming contract: hive [docs/meetings.md, "Desktop companion"](https://github.com/hivecommons/hive/blob/v5/src/docs/meetings.md) and quorum [docs/contract.md, "Companion audio"](https://github.com/hivecommons/quorum/blob/main/docs/contract.md).
 
-Status: **macOS v1 prototype** (Apple silicon, macOS 14.2 or later). Windows (WASAPI per-process loopback) and Linux (PipeWire) capture modules come next, in the same app.
+Status: **macOS v1 prototype** (Apple silicon, macOS 14.2 or later) and **Windows prototype** (x64, Windows 10 version 2004 or later, WASAPI process loopback; not yet verified on a real call). A Linux (PipeWire) capture module comes next, in the same app.
 
 ## How it works
 
-1. The companion notices a meeting app start using the microphone (Core Audio process objects; Zoom, Teams, Webex, Slack, Chrome, Edge, Arc, Safari).
+1. The companion notices a meeting app start using the microphone (macOS: Core Audio process objects; Windows: WASAPI audio sessions; Zoom, Teams, Webex, Slack, Chrome, Edge, Arc, Safari, and on Windows also Firefox and Brave).
 2. It asks **"Let Betty listen to this call?"** and shows your hive's consent notice. You tick "I told everyone in this call that Betty is listening, and they agreed" and press **Let Betty listen**. Without that, nothing is captured. **Copy notice** puts the notice on the clipboard to paste into the meeting chat.
-3. While it captures, the window shows a red **Betty is listening** indicator. The meeting app's audio (ScreenCaptureKit, no virtual audio driver) and your microphone are sent to your hive as 16 kHz mono PCM, one second at a time, over HTTPS.
+3. While it captures, the window shows a red **Betty is listening** indicator. The meeting app's audio (macOS: ScreenCaptureKit; Windows: WASAPI process loopback of the app and its helper processes; no virtual audio driver either way) and your microphone are sent to your hive as 16 kHz mono PCM, one second at a time, over HTTPS.
 4. Betty's lines (the consent notice first, then her answers) appear in the window. **Stop**, or saying "betty leave" in the call, ends it.
 
-What leaves your computer: only the audio of a capture you started, only to the hive URL you configured. The companion token is kept in the macOS keychain. Settings (hive URL, your display name) are in `~/Library/Application Support/dev.hivecommons.quorum-companion/`.
+What leaves your computer: only the audio of a capture you started, only to the hive URL you configured. The companion token is kept in the macOS keychain or in Windows Credential Manager (a generic credential under `dev.hivecommons.quorum-companion`). Settings (hive URL, your display name) are in `~/Library/Application Support/dev.hivecommons.quorum-companion/` on macOS and `%APPDATA%\dev.hivecommons.quorum-companion\` on Windows.
 
 ## Install (macOS)
 
@@ -32,9 +32,20 @@ First launch:
 
 **After an update** macOS may ask for Screen & System Audio Recording again: an ad-hoc signature changes with every build, and macOS ties the permission to the signature. Releases signed with the project's stable self-signed certificate keep the permission; see [docs/design.md](docs/design.md#signing-and-permissions). If the permission looks granted but capture fails, run `tccutil reset ScreenCapture dev.hivecommons.quorum-companion` and allow it again.
 
+## Install (Windows)
+
+The app is **unsigned** (the project has no code-signing certificate), so Windows SmartScreen warns once.
+
+- Download `QuorumCompanion-X.Y.Z-windows-x64.msi` from [Releases](https://github.com/hivecommons/quorum-companion/releases) and run it, or unzip the portable `.zip` anywhere and run `Quorum Companion.exe` (keep `quorum-capture.exe` next to it). It needs the WebView2 runtime, which Windows 10 and 11 normally have.
+- SmartScreen says "Windows protected your PC": click **More info**, then **Run anyway**.
+- Microphone: **Settings, Privacy & security, Microphone** must allow **Let desktop apps access your microphone**. Capturing the meeting app's audio needs no permission (process loopback is limited to that app's process tree), but it needs Windows 10 version 2004 (build 19041) or later.
+- In the dashboard of your hive, create a companion token, then paste the hive URL and the token into the companion's **Settings**.
+
+On Windows the app id the companion shows and passes to the capture helper is the meeting app's executable (`zoom.exe`, `ms-teams.exe`, `chrome.exe`, ...). The helper captures the top-level process of that executable with its whole process tree, so a browser's audio service and new Teams' WebView2 processes are included. If you run two separate instances of a browser, the one using the microphone is chosen.
+
 ## Building
 
-CI builds every pull request on macOS (`scripts/build-macos.sh`: the Swift capture helper with `swiftc`, the icons, then `tauri build`) and uploads the `.dmg`. Tags `v*` publish a release.
+CI builds every pull request on macOS (`scripts/build-macos.sh`: the Swift capture helper with `swiftc`, the icons, then `tauri build`) and uploads the `.dmg`, and on Windows (`scripts/build-windows.sh`: the Rust capture helper in `capture/windows`, the icons, then `tauri build --bundles msi`) and uploads the `.msi`. The Windows helper's pure logic (resampler, PCM conversion, process-tree selection, call detection) is unit-tested on both runners with `cargo test` in `capture/windows`. Tags `v*` publish a release with the macOS `.dmg`/`.zip`, the Windows `.msi`/`.zip` and `SHA256SUMS`.
 
 ## License
 

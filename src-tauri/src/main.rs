@@ -1,6 +1,6 @@
 //! Quorum Companion: lets hive's Betty listen to a call through the person's own meeting app.
 //!
-//! Flow (macOS v1): the capture helper's `detect` mode reports a meeting app starting to use the
+//! Flow (macOS and Windows): the capture helper's `detect` mode reports a meeting app starting to use the
 //! microphone; the window comes forward with the hive's consent notice; only after the person
 //! confirms the participants were told does the companion start a companion meeting on the hive
 //! and run the helper's `capture` mode, streaming the app's audio and the microphone as one-second
@@ -30,6 +30,15 @@ use audio::{Channel, Chunker};
 use hive::{Hive, HiveError, StartRequest};
 
 const HELPER: &str = "quorum-capture";
+/// What to check when the helper stops on its own.
+#[cfg(target_os = "macos")]
+const CAPTURE_STOPPED: &str =
+    "the capture stopped (check Screen & System Audio Recording in System Settings)";
+#[cfg(windows)]
+const CAPTURE_STOPPED: &str =
+    "the capture stopped (the meeting app quit, or Windows refused process loopback)";
+#[cfg(not(any(target_os = "macos", windows)))]
+const CAPTURE_STOPPED: &str = "the capture stopped";
 /// Chunks waiting to be sent; at one second each this is two minutes of audio per channel.
 const SEND_QUEUE: usize = 240;
 const SEND_RETRIES: u32 = 3;
@@ -71,11 +80,24 @@ fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn helper_path() -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    Ok(exe.with_file_name(HELPER))
+    Ok(exe.with_file_name(format!("{HELPER}{}", std::env::consts::EXE_SUFFIX)))
+}
+
+/// The capture helper as a command; on Windows it runs without a console window.
+fn helper_command() -> Result<Command, String> {
+    #[allow(unused_mut)]
+    let mut command = Command::new(helper_path()?);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    Ok(command)
 }
 
 fn spawn_helper(args: &[&str]) -> Result<Child, String> {
-    Command::new(helper_path()?)
+    helper_command()?
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -139,7 +161,7 @@ async fn companion_info(app: AppHandle) -> Result<hive::Info, String> {
 #[tauri::command]
 async fn list_apps() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(|| {
-        let out = Command::new(helper_path()?)
+        let out = helper_command()?
             .arg("list")
             .output()
             .map_err(|e| e.to_string())?;
@@ -271,10 +293,7 @@ fn spawn_reader(
             }
         }
         if !stop.load(Ordering::SeqCst) {
-            let _ = app.emit(
-                "capture-error",
-                "the capture stopped (check Screen & System Audio Recording in System Settings)",
-            );
+            let _ = app.emit("capture-error", CAPTURE_STOPPED);
         }
     });
 }

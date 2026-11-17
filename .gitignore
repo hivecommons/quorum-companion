@@ -5,3 +5,4 @@
 /src-tauri/icons
 /build
 .DS_Store
+/capture/windows/target
