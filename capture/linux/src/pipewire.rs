@@ -396,7 +396,9 @@ fn run_call(app_id: &'static str) -> ! {
                 None => backend = Backend::Pulse,
             },
             (true, None) if !waiting_logged => {
-                log(&format!("waiting for {app_id} to open an audio output stream"));
+                log(&format!(
+                    "waiting for {app_id} to open an audio output stream"
+                ));
                 waiting_logged = true;
             }
             _ => {}
