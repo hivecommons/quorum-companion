@@ -130,7 +130,7 @@ mod tests {
     fn chunks_at_one_second_and_flushes_whole_samples() {
         let mut c = Chunker::default();
         assert!(c.push(&vec![0u8; CHUNK_BYTES - 1]).is_empty());
-        let chunks = c.push(&vec![1u8; CHUNK_BYTES + 4]);
+        let chunks = c.push(&[1u8; 5]);
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0].len(), CHUNK_BYTES);
         assert_eq!(c.flush().map(|b| b.len()), Some(4));
