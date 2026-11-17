@@ -1,0 +1,67 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add aarch64-apple-darwin
+      - run: npm ci
+      - name: Tag matches the app version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(node -p 'require("./src-tauri/tauri.conf.json").version')"
+          test "v${version}" = "${TAG}" || { echo "tag ${TAG} does not match tauri.conf.json ${version}" >&2; exit 1; }
+      - name: Stable signing identity (optional)
+        env:
+          P12: ${{ secrets.MACOS_SIGNING_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
+          IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: |
+          if [ -n "$P12" ] && [ -n "$IDENTITY" ]; then
+            {
+              echo "APPLE_CERTIFICATE=$P12"
+              echo "APPLE_CERTIFICATE_PASSWORD=$P12_PASSWORD"
+              echo "APPLE_SIGNING_IDENTITY=$IDENTITY"
+            } >> "$GITHUB_ENV"
+            echo "signing with the stable self-signed identity"
+          else
+            echo "no signing secrets: ad-hoc signature (macOS may ask for permissions again after an update)"
+          fi
+      - run: scripts/build-macos.sh
+      - name: Zip the app and write checksums
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          bundle=src-tauri/target/aarch64-apple-darwin/release/bundle
+          mkdir -p dist
+          ditto -c -k --keepParent "$bundle/macos/Quorum Companion.app" "dist/QuorumCompanion-${version}-macos-arm64.zip"
+          cp "$bundle"/dmg/*.dmg "dist/QuorumCompanion-${version}-macos-arm64.dmg"
+          (cd dist && shasum -a 256 * > SHA256SUMS)
+          cat dist/SHA256SUMS
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" \
+            --notes "macOS (Apple silicon, 14.2+). Ad-hoc signed: on first launch use System Settings, Privacy & Security, Open Anyway. See the README for the permissions it asks for."
