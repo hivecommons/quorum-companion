@@ -48,7 +48,9 @@ pub struct Process {
 
 /// The meeting app for an executable name, ignoring case.
 pub fn app_for_exe(exe: &str) -> Option<&'static MeetingApp> {
-    MEETING_APPS.iter().find(|m| m.exe.eq_ignore_ascii_case(exe))
+    MEETING_APPS
+        .iter()
+        .find(|m| m.exe.eq_ignore_ascii_case(exe))
 }
 
 fn by_pid(procs: &[Process]) -> HashMap<u32, &Process> {
@@ -240,8 +242,14 @@ mod tests {
     #[test]
     fn helper_processes_belong_to_their_meeting_app() {
         let procs = snapshot();
-        assert_eq!(meeting_app_of(202, &procs).map(|m| m.exe), Some("chrome.exe"));
-        assert_eq!(meeting_app_of(302, &procs).map(|m| m.exe), Some("ms-teams.exe"));
+        assert_eq!(
+            meeting_app_of(202, &procs).map(|m| m.exe),
+            Some("chrome.exe")
+        );
+        assert_eq!(
+            meeting_app_of(302, &procs).map(|m| m.exe),
+            Some("ms-teams.exe")
+        );
         assert_eq!(meeting_app_of(401, &procs).map(|m| m.exe), Some("zoom.exe"));
         assert_eq!(meeting_app_of(600, &procs), None);
         assert_eq!(meeting_app_of(9999, &procs), None);

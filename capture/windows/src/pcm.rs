@@ -180,8 +180,14 @@ mod tests {
     fn wave_formats_map_to_sample_kinds() {
         assert_eq!(SampleKind::from_wave(1, 16, None), Some(SampleKind::I16));
         assert_eq!(SampleKind::from_wave(3, 32, None), Some(SampleKind::F32));
-        assert_eq!(SampleKind::from_wave(0xFFFE, 32, Some(3)), Some(SampleKind::F32));
-        assert_eq!(SampleKind::from_wave(0xFFFE, 32, Some(1)), Some(SampleKind::I32));
+        assert_eq!(
+            SampleKind::from_wave(0xFFFE, 32, Some(3)),
+            Some(SampleKind::F32)
+        );
+        assert_eq!(
+            SampleKind::from_wave(0xFFFE, 32, Some(1)),
+            Some(SampleKind::I32)
+        );
         assert_eq!(SampleKind::from_wave(0xFFFE, 32, None), None);
         assert_eq!(SampleKind::from_wave(1, 8, None), None);
         assert_eq!(SampleKind::from_wave(3, 64, None), None);

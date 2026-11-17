@@ -15,6 +15,8 @@ use std::thread;
 use std::time::Duration;
 
 use serde_json::json;
+use windows::core::imp::{BLOB, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0};
+use windows::core::PROPVARIANT;
 use windows::core::{implement, Error, IUnknown, Interface, Result, HRESULT, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, E_FAIL, HANDLE};
 use windows::Win32::Media::Audio::{
@@ -30,8 +32,6 @@ use windows::Win32::Media::Audio::{
     DEVICE_STATE_ACTIVE, PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
     VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, WAVEFORMATEX,
 };
-use windows::core::imp::{BLOB, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0};
-use windows::core::PROPVARIANT;
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_ALL, COINIT_MULTITHREADED,
 };
@@ -218,20 +218,20 @@ fn process_loopback_client(pid: u32) -> Result<IAudioClient> {
     // CoTaskMem memory PropVariantClear could free.
     let prop = ManuallyDrop::new(unsafe {
         PROPVARIANT::from_raw(windows::core::imp::PROPVARIANT {
-        Anonymous: PROPVARIANT_0 {
-            Anonymous: PROPVARIANT_0_0 {
-                vt: VT_BLOB.0 as u16,
-                wReserved1: 0,
-                wReserved2: 0,
-                wReserved3: 0,
-                Anonymous: PROPVARIANT_0_0_0 {
-                    blob: BLOB {
-                        cbSize: size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>() as u32,
-                        pBlobData: &mut params as *mut AUDIOCLIENT_ACTIVATION_PARAMS as *mut u8,
+            Anonymous: PROPVARIANT_0 {
+                Anonymous: PROPVARIANT_0_0 {
+                    vt: VT_BLOB.0 as u16,
+                    wReserved1: 0,
+                    wReserved2: 0,
+                    wReserved3: 0,
+                    Anonymous: PROPVARIANT_0_0_0 {
+                        blob: BLOB {
+                            cbSize: size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>() as u32,
+                            pBlobData: &mut params as *mut AUDIOCLIENT_ACTIVATION_PARAMS as *mut u8,
+                        },
                     },
                 },
             },
-        },
         })
     });
     let state = Arc::new((Mutex::new(false), Condvar::new()));
@@ -290,7 +290,9 @@ unsafe fn read_format(ptr: *const WAVEFORMATEX) -> Option<Format> {
     // WAVEFORMATEXTENSIBLE: 18 bytes of WAVEFORMATEX, Samples (2), dwChannelMask (4), then the
     // SubFormat GUID whose Data1 tells PCM (1) from float (3).
     let sub_format = if tag == 0xFFFE && extra >= 22 {
-        Some(std::ptr::read_unaligned(ptr.cast::<u8>().add(24).cast::<u32>()))
+        Some(std::ptr::read_unaligned(
+            ptr.cast::<u8>().add(24).cast::<u32>(),
+        ))
     } else {
         None
     };
@@ -392,7 +394,9 @@ pub fn run_capture(exe: &str) -> ! {
                 }
             }
             Err(e) => {
-                log(&format!("microphone unavailable, capturing the call audio only: {e}"));
+                log(&format!(
+                    "microphone unavailable, capturing the call audio only: {e}"
+                ));
                 log("check Settings, Privacy & security, Microphone, desktop app access");
             }
         }
@@ -405,7 +409,10 @@ pub fn run_capture(exe: &str) -> ! {
             std::process::exit(2);
         }
     };
-    eprintln!("{}", json!({"event": "capturing", "bundle_id": exe, "pid": root}));
+    eprintln!(
+        "{}",
+        json!({"event": "capturing", "bundle_id": exe, "pid": root})
+    );
     if let Err(e) = pump(&client, LOOPBACK_FORMAT, CHANNEL_CALL) {
         log(&format!("call audio stopped: {e}"));
     }
