@@ -23,7 +23,7 @@ async function loadSettings() {
   $("host-name").value = s.host_name;
   $("offer").checked = s.offer_on_call;
   $("settings").hidden = Boolean(s.hive_url && s.has_token);
-  $("settings-status").textContent = s.has_token ? "Token saved in the keychain." : "No token saved yet.";
+  $("settings-status").textContent = s.has_token ? "Token saved in your system's credential store." : "No token saved yet.";
   return s;
 }
 

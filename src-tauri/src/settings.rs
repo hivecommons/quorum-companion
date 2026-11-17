@@ -1,5 +1,7 @@
 //! Where the companion keeps its settings: the hive URL in a small JSON file in the app's config
-//! directory, the companion token in the OS keychain (never in the file).
+//! directory, the companion token in the OS credential store (never in the file): the macOS
+//! keychain, or Windows Credential Manager (generic credential, the `keyring` crate's
+//! `windows-native` backend).
 
 use std::fs;
 use std::path::{Path, PathBuf};

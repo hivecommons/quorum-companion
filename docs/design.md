@@ -1,4 +1,4 @@
-# Quorum Companion design (v1, macOS)
+# Quorum Companion design (v1, macOS and Windows)
 
 Recommendation and comparison: [hivecommons/hive#18596](https://github.com/hivecommons/hive/issues/18596). Reference product pattern: Plaud Desktop (detects a call, offers to capture it on the host's machine, no bot).
 
@@ -13,6 +13,7 @@ Recommendation and comparison: [hivecommons/hive#18596](https://github.com/hivec
 
 ```
 capture/macos/main.swift     quorum-capture helper (Swift): detect | list | capture <bundle-id>
+capture/windows/             quorum-capture.exe helper (Rust, WASAPI): detect | list | capture <exe>
 src-tauri/src/main.rs        Tauri app: detection, consent prompt, session, threads
 src-tauri/src/audio.rs       helper frame protocol, 1 s chunker
 src-tauri/src/hive.rs        hive companion API client
@@ -25,16 +26,27 @@ One codebase (Tauri) with per-OS capture helpers that speak the same stdout prot
 | OS | Call audio | Microphone | Call detection | Status |
 |---|---|---|---|---|
 | macOS 14.2+ | ScreenCaptureKit, filter = the meeting app | AVAudioEngine input | Core Audio process objects: `kAudioProcessPropertyIsRunningInput` for the app's bundle id | v1 |
-| Windows 10 2004+ | WASAPI process loopback (`AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK`) | WASAPI capture | audio session enumeration for the app's process | next |
+| Windows 10 2004+ | WASAPI process loopback (`AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK`, include the process tree) | WASAPI capture, default communications microphone | active audio sessions on the capture endpoints, mapped to the app through the parent process chain | v1 prototype |
 | Linux | PipeWire: capture the app's output node | PipeWire source | PipeWire node metadata (`application.process.binary`) | after |
 
 ### Frame protocol (helper stdout)
 
 `[1 byte channel: 0 = call, 1 = mic][4 bytes little-endian length][16 kHz mono s16le PCM]`. Logs go to stderr. The helper exits when its stdin closes, so it never outlives the app.
 
+### Windows capture module
+
+`capture/windows` is a small Rust binary (the `windows` crate), built for `x86_64-pc-windows-msvc` and bundled as the Tauri sidecar `quorum-capture.exe`. It speaks the same CLI and frame protocol as the macOS helper; the app id is the meeting app's executable name in lower case (`zoom.exe`, `ms-teams.exe`, `chrome.exe`).
+
+- **Detection**: every 2 s it lists the active audio sessions of every active capture endpoint (`IAudioSessionManager2`), maps each session's process to a meeting app by walking the parent process chain (a Chrome renderer belongs to `chrome.exe`, a WebView2 child to `ms-teams.exe`), and reports `call_started` / `call_ended` with the same two-poll grace as macOS.
+- **Call channel**: `ActivateAudioInterfaceAsync` on `VAD\Process_Loopback` with `AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK` and `PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE`. The target is the top-level process of the executable (its parent is a different executable); with several top-level instances, the one whose tree holds an active microphone session wins. The stream is 48 kHz stereo s16 (the virtual device converts), event-driven.
+- **Mic channel**: the default communications capture endpoint in its mix format (usually float32), event-driven.
+- **Conversion**: each packet is downmixed to mono, resampled to 16 kHz with an area-averaging (box) filter that keeps state across packets, and written as s16le frames. This logic is platform-independent and unit-tested on both CI runners.
+- **Consent, indicator, notice, stop and token** are the app's (shared with macOS): the token is stored with the `keyring` crate's `windows-native` backend, i.e. a generic credential in Windows Credential Manager.
+- **Known limits**: a meeting app launched by a browser and still its child (rare) is part of the browser's tree; process loopback needs Windows 10 2004+; the build is unsigned (SmartScreen asks once).
+
 ### Detection
 
-`quorum-capture detect` polls Core Audio's process list every 2 s and reports `call_started` when a known meeting app (or its helper process, e.g. Chrome's renderer) is using the microphone, `call_ended` after two polls without. The window comes forward with the prompt; the person can also pick a running app and press **Ask now**.
+On macOS, `quorum-capture detect` polls Core Audio's process list every 2 s and reports `call_started` when a known meeting app (or its helper process, e.g. Chrome's renderer) is using the microphone, `call_ended` after two polls without. The window comes forward with the prompt; the person can also pick a running app and press **Ask now**.
 
 ### Streaming to the hive
 
@@ -69,9 +81,9 @@ Mitigation:
 
 ## Distribution
 
-- GitHub Release per tag `vX.Y.Z`: `QuorumCompanion-X.Y.Z-macos-arm64.dmg`, `.zip` and `SHA256SUMS`.
+- GitHub Release per tag `vX.Y.Z`: `QuorumCompanion-X.Y.Z-macos-arm64.dmg`, `.zip`, `QuorumCompanion-X.Y.Z-windows-x64.msi`, `.zip` (portable: the app and `quorum-capture.exe`) and `SHA256SUMS`. Windows builds are unsigned.
 - Homebrew cask `quorum-companion` in `hivecommons/homebrew-hive`, pointing at the release zip with its sha256, `depends_on macos: ">= :sonoma"`, with caveats describing Open Anyway and the two permissions.
 
 ## Not in v1
 
-Spoken replies (virtual microphone), Windows and Linux capture, Intel Macs, automatic echo suppression, auto-start at login, a menu-bar-only mode.
+Spoken replies (virtual microphone), Linux capture, Windows on Arm, Intel Macs, automatic echo suppression, auto-start at login, a menu-bar-only mode.
