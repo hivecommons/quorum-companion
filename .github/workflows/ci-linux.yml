@@ -59,8 +59,11 @@ jobs:
           bundle=src-tauri/target/x86_64-unknown-linux-gnu/release/bundle
           deb="$(ls "$bundle"/deb/*.deb)"
           ls "$bundle"/appimage/*.AppImage
-          dpkg-deb -c "$deb" | grep -q 'usr/bin/quorum-capture$'
-          dpkg-deb -f "$deb" Depends | tee /dev/stderr | grep -q pipewire-bin
+          dpkg-deb -c "$deb" > /tmp/deb-contents.txt
+          grep -q 'usr/bin/quorum-capture$' /tmp/deb-contents.txt
+          dpkg-deb -f "$deb" Depends > /tmp/deb-depends.txt
+          cat /tmp/deb-depends.txt >&2
+          grep -q pipewire-bin /tmp/deb-depends.txt
           helper=capture/linux/target/x86_64-unknown-linux-gnu/release/quorum-capture
           # No PipeWire on the runner: list still prints one JSON array.
           "$helper" list < /dev/null | python3 -c 'import json, sys; assert isinstance(json.load(sys.stdin), list)'
