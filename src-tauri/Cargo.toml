@@ -15,7 +15,9 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
-keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native"] }
+# Linux: the Secret Service (GNOME Keyring, KWallet, KeePassXC) over D-Bus, encrypted on the
+# bus; it persists across reboots, unlike the kernel keyutils store.
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 url = "2"
 
 [profile.release]

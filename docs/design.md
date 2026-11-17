@@ -54,6 +54,20 @@ Auth: a per-user companion token minted in the hive dashboard, sent as `X-Hive-C
 
 Without headphones the microphone also hears the speakers, so the call can be transcribed twice. v1 recommends headphones. A later version can use voice processing on the microphone input (AVAudioEngine `setVoiceProcessingEnabled`) or drop `mic` segments that duplicate a `call` segment.
 
+## Linux capture module
+
+`capture/linux` is a small Rust binary (no libpipewire binding), bundled as the Tauri sidecar `quorum-capture`. It speaks the same CLI and frame protocol as the macOS helper (`detect | list | capture <app>`, `[channel][len][16 kHz mono s16le]`); the app id is a short executable name (`zoom`, `teams-for-linux`, `chrome`, `firefox`, ...), matched against PipeWire's `application.process.binary` and `/proc`.
+
+- **Why the command line tools**: the helper drives `pw-dump`, `pw-record` and, as a fallback, `pactl` and `parec`, which every PipeWire desktop ships (`pipewire-bin`, `pulseaudio-utils`; the `.deb` depends on both). The helper stays a plain binary that builds without PipeWire headers, and WirePlumber makes the links as it does for any recorder, so the helper never edits the graph itself.
+- **Detection**: every 2 s `pw-dump` lists the stream nodes; a meeting app with a `Stream/Input/Audio` node in state `running` is in a call. Same two-poll grace as macOS.
+- **Call channel (per-node capture)**: the app's `Stream/Output/Audio` node (a playing one first, then the newest), recorded with `pw-record --target <object.serial>` and `node.dont-fallback`, `node.dont-reconnect`, `node.dont-move`, so the session manager can never link the recorder to the default microphone or another app instead. The helper follows the app to a new stream when its stream goes away or another of its streams plays while it is silent (meeting apps reopen their stream when the speaker changes, browsers have one per tab). Only one stream is recorded at a time.
+- **Fallback**: if `pw-record` exits before giving audio (an older PipeWire such as 0.3.48 cannot write raw audio to stdout) or gives none for 6 s while its stream is playing (the link was refused), the helper records the same stream through pipewire-pulse: `parec --monitor-stream=<sink-input>`, the sink-input found by `object.serial` in `pactl --format=json list sink-inputs`.
+- **Mic channel**: the default source (`pw-record` without a target, or `parec --device=@DEFAULT_SOURCE@`).
+- **Conversion**: the recorders deliver 48 kHz s16le (stereo for the call, mono for the mic); the helper downmixes and resamples to 16 kHz with the same area-averaging filter as the Windows module, keeping state across reads. Platform-independent and unit-tested.
+- **Lifetime**: the recorders are the helper's children with `PR_SET_PDEATHSIG`; the helper kills them when its stdin closes, and they get SIGTERM if it dies. It exits with status 3 when the meeting app quits.
+- **Token**: the `keyring` crate's `sync-secret-service` backend (with `crypto-rust`, so the secret is encrypted on the bus), i.e. the desktop's Secret Service keyring. The previous `linux-native` (kernel keyutils) store would have lost the token at every reboot.
+- **Known limits**: a browser playing the call in one tab and something else in another is captured stream by stream (the playing one), not mixed; a Flatpak or Snap app is matched by the binary PipeWire reports for it; there is no aarch64 build yet; nothing is signed.
+
 ## Signing and permissions
 
 There is no Apple Developer ID, so builds are **ad-hoc signed** (`codesign -s -`, Tauri `signingIdentity: "-"`) with the hardened runtime and the `com.apple.security.device.audio-input` entitlement, and are not notarized. Gatekeeper therefore blocks the first launch until the person clicks **Open Anyway** in System Settings, Privacy & Security. Homebrew 5 removed `--no-quarantine`, so the cask cannot skip that step.
