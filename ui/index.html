@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quorum Companion</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Quorum Companion</h1>
+    <button id="open-settings" class="link" type="button">Settings</button>
+  </header>
+
+  <section id="settings" hidden>
+    <h2>Your hive</h2>
+    <label>Hive URL <input id="hive-url" type="url" placeholder="https://your-hive.example" autocomplete="off"></label>
+    <label>Companion token <input id="token" type="password" placeholder="leave empty to keep the saved one" autocomplete="off"></label>
+    <p class="hint">Create a companion token in your hive's dashboard. It is kept in the macOS keychain and only works for companion meetings.</p>
+    <label>Your name in transcripts <input id="host-name" type="text" placeholder="defaults to your hive user"></label>
+    <label class="check"><input id="offer" type="checkbox" checked> Offer to listen when a call starts</label>
+    <div class="row"><button id="save-settings" type="button">Save</button><span id="settings-status" class="hint"></span></div>
+  </section>
+
+  <section id="idle">
+    <p id="idle-text">Waiting for a call. When Zoom, Teams, a browser meeting or another meeting app starts using your microphone, the companion asks whether Betty may listen.</p>
+    <div class="row">
+      <select id="apps" aria-label="Meeting app"></select>
+      <button id="refresh-apps" class="secondary" type="button">Refresh</button>
+      <button id="manual-start" class="secondary" type="button">Ask now</button>
+    </div>
+  </section>
+
+  <section id="prompt" hidden>
+    <h2>Let Betty listen to this call?</h2>
+    <p id="prompt-app" class="app"></p>
+    <p id="consent-text" class="consent"></p>
+    <label>Title <input id="title" type="text" placeholder="optional"></label>
+    <label class="check"><input id="attest" type="checkbox"> I told everyone in this call that Betty is listening, and they agreed.</label>
+    <div class="row">
+      <button id="copy-notice" class="secondary" type="button">Copy notice for the meeting chat</button>
+    </div>
+    <div class="row">
+      <button id="start" type="button" disabled>Let Betty listen</button>
+      <button id="dismiss" class="secondary" type="button">Not now</button>
+    </div>
+  </section>
+
+  <section id="live" hidden>
+    <p class="listening"><span class="dot" aria-hidden="true"></span> Betty is listening to <strong id="live-app"></strong></p>
+    <div class="row">
+      <button id="stop" class="danger" type="button">Stop</button>
+      <button id="copy-notice-live" class="secondary" type="button">Copy notice</button>
+    </div>
+    <h2>Betty</h2>
+    <ol id="replies" aria-live="polite"></ol>
+  </section>
+
+  <p id="status" class="status" role="status"></p>
+  <script src="main.js"></script>
+</body>
+</html>

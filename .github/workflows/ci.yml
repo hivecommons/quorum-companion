@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+          rustup target add aarch64-apple-darwin
+      - run: npm ci
+      - name: Capture helper, icons and app bundle (ad-hoc signed)
+        run: scripts/build-macos.sh
+      - name: Rust format, lint and tests
+        working-directory: src-tauri
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+      - name: Check the bundle
+        run: |
+          app="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Quorum Companion.app"
+          test -x "$app/Contents/MacOS/quorum-capture"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -d --entitlements - "$app" | grep -q com.apple.security.device.audio-input
+          /usr/libexec/PlistBuddy -c 'Print :NSAudioCaptureUsageDescription' "$app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist" | grep -qx dev.hivecommons.quorum-companion
+          "$app/Contents/MacOS/quorum-capture" list < /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quorum-companion-macos-arm64
+          path: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          retention-days: 14

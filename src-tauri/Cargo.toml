@@ -1,0 +1,24 @@
+[package]
+name = "quorum-companion"
+version = "0.1.0"
+description = "Desktop companion for hive's Betty: streams your own meeting app's audio to your hive after consent"
+license = "Apache-2.0"
+repository = "https://github.com/hivecommons/quorum-companion"
+edition = "2021"
+rust-version = "1.80"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native"] }
+url = "2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
