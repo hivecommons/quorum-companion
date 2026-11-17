@@ -220,7 +220,7 @@ fn process_loopback_client(pid: u32) -> Result<IAudioClient> {
         PROPVARIANT::from_raw(windows::core::imp::PROPVARIANT {
             Anonymous: PROPVARIANT_0 {
                 Anonymous: PROPVARIANT_0_0 {
-                    vt: VT_BLOB.0 as u16,
+                    vt: VT_BLOB.0,
                     wReserved1: 0,
                     wReserved2: 0,
                     wReserved3: 0,
