@@ -1,0 +1,15 @@
+# Changelog
+
+## 0.1.1
+
+First release with Windows and Linux assets.
+
+- Windows (x64): unsigned `.msi` and portable `.zip`.
+- Linux (x86_64, PipeWire with WirePlumber): `.deb` and AppImage.
+- A single `SHA256SUMS` covers every attached file.
+- EXPERIMENTAL: the Windows and Linux builds have not yet been verified on a real call. Expect problems and use macOS for real meetings. To help verify, follow [docs/verify-windows.md](docs/verify-windows.md) or [docs/verify-linux.md](docs/verify-linux.md).
+- macOS is unchanged from 0.1.0.
+
+## 0.1.0
+
+First release: macOS (Apple silicon) call detection, consent prompt, capture and streaming to the hive.
