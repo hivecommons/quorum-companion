@@ -35,6 +35,11 @@ pub const MEETING_APPS: &[MeetingApp] = &[
     meeting_app("arc.exe", "browser", "Arc"),
 ];
 
+/// One entry of the JSON array `list` prints; the keys are what the companion app reads.
+pub fn app_json(m: &MeetingApp, in_call: bool) -> serde_json::Value {
+    serde_json::json!({"bundle_id": m.exe, "app": m.app, "name": m.name, "in_call": in_call})
+}
+
 /// How deep a parent chain is followed; parent ids can be stale or reused, so never loop.
 const MAX_DEPTH: usize = 64;
 
@@ -200,6 +205,20 @@ impl Detector {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn list_entries_have_exactly_the_keys_the_app_reads() {
+        let zoom = app_for_exe("Zoom.exe").expect("zoom is a meeting app");
+        let value = app_json(zoom, true);
+        let object = value.as_object().expect("an entry is a JSON object");
+        let mut keys: Vec<&str> = object.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(keys, ["app", "bundle_id", "in_call", "name"]);
+        assert_eq!(value["bundle_id"], "zoom.exe");
+        assert_eq!(value["app"], "zoom");
+        assert_eq!(value["in_call"], true);
+        assert_eq!(app_json(zoom, false)["in_call"], false);
+    }
 
     fn p(pid: u32, parent: u32, exe: &str) -> Process {
         Process {

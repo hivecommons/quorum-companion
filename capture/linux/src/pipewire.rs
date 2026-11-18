@@ -140,19 +140,7 @@ pub fn run_list() -> ! {
     let names = process_names();
     let mut running = apps::running(names.iter().map(String::as_str));
     running.extend(graph::apps_with_streams(&nodes));
-    let list: Vec<Value> = apps::MEETING_APPS
-        .iter()
-        .filter(|m| running.contains(m.id))
-        .map(|m| {
-            json!({
-                "bundle_id": m.id,
-                "app": m.app,
-                "name": m.name,
-                "in_call": in_call.contains_key(m.id),
-            })
-        })
-        .collect();
-    emit_json(&Value::Array(list));
+    emit_json(&apps::list_json(&running, &in_call));
     shutdown(0)
 }
 

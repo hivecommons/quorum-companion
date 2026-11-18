@@ -114,6 +114,27 @@ pub fn running<'a>(names: impl IntoIterator<Item = &'a str>) -> BTreeSet<&'stati
         .collect()
 }
 
+/// The JSON array `list` prints, in table order: the meeting apps in `running`, each with
+/// whether it is `in_call` (the keys are what the companion app reads).
+pub fn list_json(
+    running: &BTreeSet<&'static str>,
+    in_call: &std::collections::BTreeMap<String, String>,
+) -> serde_json::Value {
+    let list: Vec<serde_json::Value> = MEETING_APPS
+        .iter()
+        .filter(|m| running.contains(m.id))
+        .map(|m| {
+            serde_json::json!({
+                "bundle_id": m.id,
+                "app": m.app,
+                "name": m.name,
+                "in_call": in_call.contains_key(m.id),
+            })
+        })
+        .collect();
+    serde_json::Value::Array(list)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,5 +180,33 @@ mod tests {
         let ids: Vec<&str> = running(names).into_iter().collect();
         assert_eq!(ids, ["chromium", "slack", "zoom"]);
         assert!(running(Vec::<&str>::new()).is_empty());
+    }
+
+    #[test]
+    fn list_json_is_an_array_with_the_keys_the_app_reads() {
+        let empty = std::collections::BTreeMap::new();
+        assert_eq!(list_json(&BTreeSet::new(), &empty), serde_json::json!([]));
+        let running: BTreeSet<&'static str> = ["slack", "zoom"].into_iter().collect();
+        let in_call = std::collections::BTreeMap::from([("zoom".to_string(), "zoom".to_string())]);
+        let value = list_json(&running, &in_call);
+        let entries = value.as_array().expect("list is a JSON array");
+        // Table order (zoom before slack), not the set's order.
+        let ids: Vec<&str> = entries
+            .iter()
+            .map(|e| e["bundle_id"].as_str().expect("bundle_id is a string"))
+            .collect();
+        assert_eq!(ids, ["zoom", "slack"]);
+        for entry in entries {
+            let mut keys: Vec<&str> = entry
+                .as_object()
+                .expect("an entry is an object")
+                .keys()
+                .map(String::as_str)
+                .collect();
+            keys.sort_unstable();
+            assert_eq!(keys, ["app", "bundle_id", "in_call", "name"]);
+        }
+        assert_eq!(entries[0]["in_call"], true);
+        assert_eq!(entries[1]["in_call"], false);
     }
 }

@@ -95,6 +95,34 @@ jobs:
           test -f "$release/quorum-companion.exe"
           helper=capture/windows/target/x86_64-pc-windows-msvc/release/quorum-capture.exe
           "$helper" list < /dev/null
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probe - does this runner have an audio render endpoint?
+        id: audio
+        shell: pwsh
+        run: |
+          # Hosted runners usually have no sound device. This only records what is there; the
+          # next step runs a real capture if (and only if) a render endpoint exists.
+          $svc = Get-Service Audiosrv -ErrorAction SilentlyContinue
+          if ($svc -and $svc.Status -ne 'Running') {
+            try { Start-Service Audiosrv; Start-Sleep -Seconds 3 } catch { Write-Host "Audiosrv did not start: $_" }
+            $svc = Get-Service Audiosrv -ErrorAction SilentlyContinue
+          }
+          Write-Host "Windows Audio service: $(if ($svc) { $svc.Status } else { 'not installed' })"
+          $endpoints = @(Get-PnpDevice -Class AudioEndpoint -PresentOnly -ErrorAction SilentlyContinue |
+            Where-Object { $_.Status -eq 'OK' })
+          $endpoints | ForEach-Object { Write-Host "endpoint: $($_.FriendlyName) $($_.InstanceId)" }
+          Write-Host "sound devices: $(@(Get-CimInstance Win32_SoundDevice -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }) -join ', ')"
+          # Render endpoints have instance ids of the form SWD\MMDEVAPI\{0.0.0.00000000}.{guid}.
+          $render = @($endpoints | Where-Object { $_.InstanceId -like '*{0.0.0.*' })
+          $mode = if ($svc -and $svc.Status -eq 'Running' -and $render.Count -gt 0) { 'audio' } else { 'degraded' }
+          Write-Host "render endpoints: $($render.Count) -> capture smoke test mode: $mode"
+          "mode=$mode" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+      - name: Capture smoke test (mode from the probe - see the log for which one ran)
+        run: |
+          helper=capture/windows/target/x86_64-pc-windows-msvc/release/quorum-capture.exe
+          python scripts/ci/windows_capture_smoke.py "$helper" "${{ steps.audio.outputs.mode }}"
       - uses: actions/upload-artifact@v4
         with:
           name: quorum-companion-windows-x64
