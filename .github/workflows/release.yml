@@ -1,14 +1,25 @@
 name: release
 
+# Tags v* build every platform and publish one release. Dry run (no release, no tag):
+# run this workflow by hand (Actions, release, Run workflow) on a branch, or open a PR that
+# touches this file or a build script. Both run only the windows and linux jobs, including
+# the collect steps and a check of the files they produce, and upload them as 7-day
+# workflow artifacts. The macos and publish jobs run only for a tag push.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "scripts/build-*.sh"
 
 permissions:
   contents: read
 
 jobs:
   macos:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
@@ -81,6 +92,7 @@ jobs:
           rustup target add x86_64-pc-windows-msvc
       - run: npm ci
       - name: Tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -91,29 +103,83 @@ jobs:
       - name: Collect the .msi and a portable .zip
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
+          version="$(node -p 'require("./src-tauri/tauri.conf.json").version')"
           release=src-tauri/target/x86_64-pc-windows-msvc/release
           mkdir -p dist portable
           cp "$release"/bundle/msi/*.msi "dist/QuorumCompanion-${version}-windows-x64.msi"
           cp "$release/quorum-companion.exe" "portable/Quorum Companion.exe"
           cp capture/windows/target/x86_64-pc-windows-msvc/release/quorum-capture.exe portable/
           (cd portable && 7z a -tzip "../dist/QuorumCompanion-${version}-windows-x64.zip" .)
+          # prove the assets are real (this is the part a dry run exists to exercise)
+          7z l "dist/QuorumCompanion-${version}-windows-x64.zip" | tee /dev/stderr | grep -q "Quorum Companion.exe"
+          7z l "dist/QuorumCompanion-${version}-windows-x64.zip" | grep -q "quorum-capture.exe"
+          test -s "dist/QuorumCompanion-${version}-windows-x64.msi"
+          ls -l dist
       - uses: actions/upload-artifact@v4
         with:
           name: release-windows
           path: dist/*
           retention-days: 7
 
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: System libraries (WebKitGTK for Tauri, D-Bus for the Secret Service keyring)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config file patchelf libfuse2 xdg-utils \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add x86_64-unknown-linux-gnu
+      - run: npm ci
+      - name: Tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(node -p 'require("./src-tauri/tauri.conf.json").version')"
+          test "v${version}" = "${TAG}" || { echo "tag ${TAG} does not match tauri.conf.json ${version}" >&2; exit 1; }
+      - run: scripts/build-linux.sh
+      - name: Collect the .deb and the AppImage
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./src-tauri/tauri.conf.json").version')"
+          bundle=src-tauri/target/x86_64-unknown-linux-gnu/release/bundle
+          mkdir -p dist
+          cp "$bundle"/deb/*.deb "dist/QuorumCompanion-${version}-linux-x64.deb"
+          cp "$bundle"/appimage/*.AppImage "dist/QuorumCompanion-${version}-linux-x64.AppImage"
+          chmod +x "dist/QuorumCompanion-${version}-linux-x64.AppImage"
+          dpkg-deb -I "dist/QuorumCompanion-${version}-linux-x64.deb" | grep -Ei 'depends|package'
+          dpkg-deb -c "dist/QuorumCompanion-${version}-linux-x64.deb" | grep -q quorum-capture
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: dist/*
+          retention-days: 7
+
   publish:
     # macOS is the first-priority platform: publish whenever it succeeded, even if
-    # the experimental Windows job failed (that job still shows as failed on the run).
-    needs: [macos, windows]
-    if: always() && needs.macos.result == 'success'
+    # the experimental Windows or Linux job failed (that job still shows as failed on the run).
+    # Only a tag push publishes; a dry run (manual or PR) never reaches this job.
+    needs: [macos, windows, linux]
+    if: always() && startsWith(github.ref, 'refs/tags/v') && needs.macos.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      # pattern download: a missing release-windows artifact (failed windows job) is not an error
+      # pattern download: a missing release-windows or release-linux artifact (failed job) is not an error
       - uses: actions/download-artifact@v4
         with:
           pattern: release-*
@@ -129,4 +195,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" \
-            --notes "macOS (Apple silicon, 14.2+): ad-hoc signed, on first launch use System Settings, Privacy & Security, Open Anyway. Windows (x64, Windows 10 2004+): unsigned .msi or portable .zip, SmartScreen asks once (More info, Run anyway). See the README for the permissions each asks for. EXPERIMENTAL: the Windows and Linux builds are prototypes that have not yet been verified on a real call; expect problems, and use macOS for real meetings. The Windows assets are only attached when the Windows build succeeded."
+            --notes "macOS (Apple silicon, 14.2+): ad-hoc signed, on first launch use System Settings, Privacy & Security, Open Anyway. Windows (x64, Windows 10 2004+): unsigned .msi or portable .zip, SmartScreen asks once (More info, Run anyway). Linux (x86_64, PipeWire with WirePlumber): .deb or AppImage. See the README for the permissions each asks for. EXPERIMENTAL: the Windows and Linux builds are prototypes that have not yet been verified on a real call (see docs/verify-windows.md and docs/verify-linux.md); expect problems, and use macOS for real meetings. The Windows and Linux assets are only attached when their builds succeeded. SHA256SUMS covers every attached file."

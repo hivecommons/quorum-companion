@@ -6,7 +6,7 @@ It is how Betty works on Zoom without a Zoom app or bot (Zoom does not allow aut
 
 Design and comparison: [hivecommons/hive#18596](https://github.com/hivecommons/hive/issues/18596). Streaming contract: hive [docs/meetings.md, "Desktop companion"](https://github.com/hivecommons/hive/blob/v5/src/docs/meetings.md) and quorum [docs/contract.md, "Companion audio"](https://github.com/hivecommons/quorum/blob/main/docs/contract.md).
 
-Status: **macOS v1 prototype** (Apple silicon, macOS 14.2 or later) and **Windows prototype** (x64, Windows 10 version 2004 or later, WASAPI process loopback; not yet verified on a real call). A Linux (PipeWire) capture module comes next, in the same app.
+Status: **macOS v1 prototype** (Apple silicon, macOS 14.2 or later), **Windows prototype** (x64, Windows 10 version 2004 or later, WASAPI process loopback) and **Linux prototype** (x86_64, PipeWire). Windows and Linux are experimental: they build in CI but have not been verified on a real call. To help verify, follow [Verify on Windows](docs/verify-windows.md) or [Verify on Linux](docs/verify-linux.md).
 
 ## How it works
 
@@ -45,11 +45,11 @@ On Windows the app id the companion shows and passes to the capture helper is th
 
 ## Building
 
-CI builds every pull request on macOS (`scripts/build-macos.sh`: the Swift capture helper with `swiftc`, the icons, then `tauri build`) and uploads the `.dmg`, and on Windows (`scripts/build-windows.sh`: the Rust capture helper in `capture/windows`, the icons, then `tauri build --bundles msi`) and uploads the `.msi`. The Windows helper's pure logic (resampler, PCM conversion, process-tree selection, call detection) is unit-tested on both runners with `cargo test` in `capture/windows`. Tags `v*` publish a release with the macOS `.dmg`/`.zip`, the Windows `.msi`/`.zip` and `SHA256SUMS`.
+CI builds every pull request on macOS (`scripts/build-macos.sh`: the Swift capture helper with `swiftc`, the icons, then `tauri build`) and uploads the `.dmg`, and on Windows (`scripts/build-windows.sh`: the Rust capture helper in `capture/windows`, the icons, then `tauri build --bundles msi`) and uploads the `.msi`. The Windows helper's pure logic (resampler, PCM conversion, process-tree selection, call detection) is unit-tested on both runners with `cargo test` in `capture/windows`. Tags `v*` publish one release (`release.yml`) with the macOS `.dmg`/`.zip`, the Windows `.msi`/`.zip`, the Linux `.deb`/AppImage and a single `SHA256SUMS`; a failed Windows or Linux job does not block the macOS assets. To exercise the Windows and Linux packaging without publishing anything, run the release workflow by hand (Actions, release, Run workflow) or open a PR touching it: only the Windows and Linux jobs run and their files are kept as workflow artifacts.
 
 ## Linux (prototype)
 
-Status: **prototype, not yet verified on a real call** (x86_64; any desktop running PipeWire with WirePlumber, e.g. Ubuntu 22.10+, Debian 12+, Fedora 34+). The window, the consent prompt, the "Betty is listening" indicator, **Copy notice** and **Stop** are the same as on macOS.
+Status: **experimental prototype, not yet verified on a real call** (see [Verify on Linux](docs/verify-linux.md); x86_64; any desktop running PipeWire with WirePlumber, e.g. Ubuntu 22.10+, Debian 12+, Fedora 34+). The window, the consent prompt, the "Betty is listening" indicator, **Copy notice** and **Stop** are the same as on macOS.
 
 - Install the `.deb` from [Releases](https://github.com/hivecommons/quorum-companion/releases) (`sudo apt install ./QuorumCompanion-X.Y.Z-linux-x64.deb`, which pulls in `pipewire-bin` and `pulseaudio-utils`), or make the AppImage executable and run it (it needs `pw-dump`, `pw-record` and, for the fallback, `parec` and `pactl` from the system).
 - Call audio: the companion records **only the meeting app's own output stream** (PipeWire per-node capture: `pw-record --target <the app's stream node>`), never the whole speaker mix and with no virtual device. Where `pw-record` cannot do that (an older PipeWire such as 0.3.48, or a session manager that refuses the link) it records the same stream through pipewire-pulse (`parec --monitor-stream=<the app's sink-input>`). The microphone is the default source.
