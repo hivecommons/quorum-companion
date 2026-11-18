@@ -1,6 +1,6 @@
 [package]
 name = "quorum-companion"
-version = "0.1.1"
+version = "0.2.0"
 description = "Desktop companion for hive's Betty: streams your own meeting app's audio to your hive after consent"
 license = "Apache-2.0"
 repository = "https://github.com/hivecommons/quorum-companion"
