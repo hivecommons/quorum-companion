@@ -243,4 +243,17 @@ mod tests {
         assert_eq!(frame(CHANNEL_MIC, &[9, 8]), [1, 2, 0, 0, 0, 9, 8]);
         assert_eq!(frame(CHANNEL_CALL, &[]), [0, 0, 0, 0, 0]);
     }
+
+    #[test]
+    fn frame_length_is_a_little_endian_u32_and_the_payload_is_verbatim() {
+        // 70_000 = 0x0001_1170 needs three length bytes, so byte order and width both matter.
+        let payload: Vec<u8> = (0..70_000u32).map(|i| (i % 251) as u8).collect();
+        let framed = frame(CHANNEL_CALL, &payload);
+        assert_eq!(framed.len(), 5 + payload.len());
+        assert_eq!(framed[0], CHANNEL_CALL);
+        assert_eq!(framed[1..5], [0x70, 0x11, 0x01, 0x00]);
+        assert_eq!(framed[5..], payload[..]);
+        assert_eq!(frame(CHANNEL_MIC, &[1])[0], 1);
+        assert_ne!(CHANNEL_CALL, CHANNEL_MIC);
+    }
 }

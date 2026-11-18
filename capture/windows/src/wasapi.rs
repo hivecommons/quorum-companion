@@ -169,17 +169,13 @@ pub fn run_detect() -> ! {
     }
 }
 
-fn app_json(m: &apps::MeetingApp, in_call: bool) -> serde_json::Value {
-    json!({"bundle_id": m.exe, "app": m.app, "name": m.name, "in_call": in_call})
-}
-
 pub fn run_list() -> ! {
     com_init();
     let procs = processes();
     let in_call = apps::apps_in_call(&microphone_pids(), &procs);
     let list: Vec<serde_json::Value> = apps::running_apps(&procs)
         .into_iter()
-        .map(|m| app_json(m, in_call.contains_key(m.exe)))
+        .map(|m| apps::app_json(m, in_call.contains_key(m.exe)))
         .collect();
     emit_json(&serde_json::Value::Array(list));
     std::process::exit(0);
