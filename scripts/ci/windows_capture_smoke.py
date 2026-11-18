@@ -132,7 +132,15 @@ def test_usage_errors(helper):
     code, out, err = run(helper, "capture")
     if code != 64 or "usage:" not in err:
         fail(f"capture without an app: exit {code}, stderr {err!r}")
-    code, _, err = run(helper, "capture", "definitely-not-running.exe")
+    # stdin stays open: the helper exits 0 as soon as stdin closes, which would race the check.
+    h = Helper(helper, "capture", "definitely-not-running.exe")
+    try:
+        code = h.proc.wait(timeout=EXIT_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        h.proc.kill()
+        fail("capture of a missing app did not exit by itself")
+    time.sleep(0.5)
+    err = h.stderr()
     if code != 2 or "not running" not in err:
         fail(f"capture of a process that is not running: exit {code}, stderr {err!r}")
     note("usage error paths OK: exit 64 for bad arguments, exit 2 'not running' for a missing app")
