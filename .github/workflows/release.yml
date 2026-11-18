@@ -111,8 +111,10 @@ jobs:
           cp capture/windows/target/x86_64-pc-windows-msvc/release/quorum-capture.exe portable/
           (cd portable && 7z a -tzip "../dist/QuorumCompanion-${version}-windows-x64.zip" .)
           # prove the assets are real (this is the part a dry run exists to exercise)
-          7z l "dist/QuorumCompanion-${version}-windows-x64.zip" | tee /dev/stderr | grep -q "Quorum Companion.exe"
-          7z l "dist/QuorumCompanion-${version}-windows-x64.zip" | grep -q "quorum-capture.exe"
+          listing="$(7z l "dist/QuorumCompanion-${version}-windows-x64.zip")"
+          echo "$listing"
+          grep -q "Quorum Companion.exe" <<< "$listing"
+          grep -q "quorum-capture.exe" <<< "$listing"
           test -s "dist/QuorumCompanion-${version}-windows-x64.msi"
           ls -l dist
       - uses: actions/upload-artifact@v4
@@ -160,8 +162,9 @@ jobs:
           cp "$bundle"/deb/*.deb "dist/QuorumCompanion-${version}-linux-x64.deb"
           cp "$bundle"/appimage/*.AppImage "dist/QuorumCompanion-${version}-linux-x64.AppImage"
           chmod +x "dist/QuorumCompanion-${version}-linux-x64.AppImage"
-          dpkg-deb -I "dist/QuorumCompanion-${version}-linux-x64.deb" | grep -Ei 'depends|package'
-          dpkg-deb -c "dist/QuorumCompanion-${version}-linux-x64.deb" | grep -q quorum-capture
+          dpkg-deb -I "dist/QuorumCompanion-${version}-linux-x64.deb" | grep -Ei 'depends|package' || true
+          contents="$(dpkg-deb -c "dist/QuorumCompanion-${version}-linux-x64.deb")"
+          grep -q quorum-capture <<< "$contents" || { echo "quorum-capture missing from the .deb" >&2; echo "$contents" >&2; exit 1; }
           ls -l dist
       - uses: actions/upload-artifact@v4
         with:
