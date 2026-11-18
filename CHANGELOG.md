@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Betty's listening chime: when the hive's replies say `tone`, the companion plays the same soft two-note chime as quorum (`src/tone.ts`) on this computer's default output, never into the call. A new setting, "Play Betty's listening chime" (on by default), turns it off. Needs a hive and quorum with the companion chime ([#12](https://github.com/hivecommons/quorum-companion/issues/12)).
+
 ## 0.1.1
 
 First release with Windows and Linux assets.

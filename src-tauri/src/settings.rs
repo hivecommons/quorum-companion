@@ -21,6 +21,9 @@ pub struct Settings {
     /// Ask before every call (true) or never offer (false).
     #[serde(default = "default_true")]
     pub offer_on_call: bool,
+    /// Play Betty's listening chime on this computer when she is about to answer.
+    #[serde(default = "default_true")]
+    pub listening_chime: bool,
 }
 
 fn default_true() -> bool {
@@ -37,6 +40,7 @@ pub fn load(dir: &Path) -> Settings {
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or(Settings {
             offer_on_call: true,
+            listening_chime: true,
             ..Settings::default()
         })
 }
@@ -81,13 +85,18 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("qc-settings-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         assert!(load(&dir).offer_on_call);
+        assert!(load(&dir).listening_chime);
         let s = Settings {
             hive_url: "https://h.example".into(),
             host_name: "Ana".into(),
             offer_on_call: false,
+            listening_chime: false,
         };
         save(&dir, &s).unwrap();
         assert_eq!(load(&dir), s);
+        // Settings saved before the chime existed keep it on.
+        fs::write(path(&dir), r#"{"hive_url":"https://h.example"}"#).unwrap();
+        assert!(load(&dir).listening_chime);
         fs::write(path(&dir), "not json").unwrap();
         assert_eq!(load(&dir).hive_url, "");
         let _ = fs::remove_dir_all(&dir);
