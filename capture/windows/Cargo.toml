@@ -1,6 +1,6 @@
 [package]
 name = "quorum-capture"
-version = "0.1.0"
+version = "0.1.1"
 description = "Windows capture module of the Quorum companion: WASAPI process loopback and microphone as 16 kHz mono PCM frames on stdout"
 license = "Apache-2.0"
 repository = "https://github.com/hivecommons/quorum-companion"

@@ -1,6 +1,6 @@
 [package]
 name = "quorum-capture"
-version = "0.1.0"
+version = "0.1.1"
 description = "Linux capture module of the Quorum companion: PipeWire per-node capture of the meeting app and the default source as 16 kHz mono PCM frames on stdout"
 license = "Apache-2.0"
 repository = "https://github.com/hivecommons/quorum-companion"
