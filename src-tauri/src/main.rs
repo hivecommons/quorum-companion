@@ -4,7 +4,8 @@
 //! microphone; the window comes forward with the hive's consent notice; only after the person
 //! confirms the participants were told does the companion start a companion meeting on the hive
 //! and run the helper's `capture` mode, streaming the app's audio and the microphone as one-second
-//! PCM chunks. Betty's replies are polled into the window. Stopping (or the hive ending the
+//! PCM chunks. Betty's replies are polled into the window, and when a poll says `tone` the window
+//! plays her listening chime (tone.rs) on this computer. Stopping (or the hive ending the
 //! meeting, e.g. "betty leave") stops the helper. Nothing is captured without that confirmation.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -12,6 +13,7 @@
 mod audio;
 mod hive;
 mod settings;
+mod tone;
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
@@ -21,7 +23,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -65,7 +67,15 @@ struct SettingsView {
     hive_url: String,
     host_name: String,
     offer_on_call: bool,
+    listening_chime: bool,
     has_token: bool,
+}
+
+/// The listening chime for the window to play (tone.rs): mono signed 16-bit samples.
+#[derive(Clone, Serialize)]
+struct ToneView {
+    sample_rate: u32,
+    samples: Vec<i16>,
 }
 
 #[derive(Clone, Serialize)]
@@ -123,6 +133,7 @@ fn get_settings(app: AppHandle) -> Result<SettingsView, String> {
         hive_url: s.hive_url,
         host_name: s.host_name,
         offer_on_call: s.offer_on_call,
+        listening_chime: s.listening_chime,
         has_token,
     })
 }
@@ -133,6 +144,7 @@ fn save_settings(
     hive_url: String,
     host_name: String,
     offer_on_call: bool,
+    listening_chime: bool,
     token: Option<String>,
 ) -> Result<SettingsView, String> {
     let url = hive::validate_base(&hive_url).map_err(|e| e.to_string())?;
@@ -143,12 +155,21 @@ fn save_settings(
             hive_url: url.clone(),
             host_name: host_name.trim().to_string(),
             offer_on_call,
+            listening_chime,
         },
     )?;
     if let Some(t) = token {
         settings::set_token(&url, &t)?;
     }
     get_settings(app)
+}
+
+#[tauri::command]
+fn listening_tone() -> ToneView {
+    ToneView {
+        sample_rate: tone::TONE_RATE_HZ,
+        samples: tone::render(),
+    }
 }
 
 #[tauri::command]
@@ -335,14 +356,25 @@ fn spawn_sender(
     });
 }
 
-/// Polls Betty's lines into the window until the session stops or the hive ends the meeting.
+/// Polls Betty's lines into the window until the session stops or the hive ends the meeting,
+/// and asks the window to play the listening chime when a poll says `tone` (unless the person
+/// turned it off, or a chime is still playing).
 fn spawn_replies(app: AppHandle, hive: Arc<Hive>, meeting_id: String, stop: Arc<AtomicBool>) {
     thread::spawn(move || {
         let mut after = 0;
+        let mut chime = tone::ToneGate::default();
         while !stop.load(Ordering::SeqCst) {
             match hive.replies(&meeting_id, after) {
                 Ok(r) => {
                     after = r.next_seq;
+                    if r.tone {
+                        let enabled = config_dir(&app)
+                            .map(|d| settings::load(&d).listening_chime)
+                            .unwrap_or(true);
+                        chime.offer(enabled, Instant::now(), || {
+                            let _ = app.emit("listening-tone", ());
+                        });
+                    }
                     if !r.lines.is_empty() {
                         let _ = app.emit("replies", r.lines);
                     }
@@ -437,6 +469,7 @@ fn main() {
             get_settings,
             save_settings,
             companion_info,
+            listening_tone,
             list_apps,
             current_session,
             start_capture,

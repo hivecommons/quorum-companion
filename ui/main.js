@@ -8,6 +8,10 @@ const { listen } = window.__TAURI__.event;
 const $ = (id) => document.getElementById(id);
 let info = null;
 let pending = null; // { bundle_id, app, name }
+// Betty's listening chime: the samples come from the Rust side (tone.rs, the same chime as
+// quorum's); this only plays them on the default output. Never into the call.
+const INT16_FULL_SCALE = 32767;
+let chime = null; // { ctx, buffer }
 
 function show(section) {
   for (const id of ["idle", "prompt", "live"]) $(id).hidden = id !== section;
@@ -22,6 +26,7 @@ async function loadSettings() {
   $("hive-url").value = s.hive_url;
   $("host-name").value = s.host_name;
   $("offer").checked = s.offer_on_call;
+  $("chime").checked = s.listening_chime;
   $("settings").hidden = Boolean(s.hive_url && s.has_token);
   $("settings-status").textContent = s.has_token ? "Token saved in your system's credential store." : "No token saved yet.";
   return s;
@@ -34,6 +39,7 @@ async function saveSettings() {
       hiveUrl: $("hive-url").value,
       hostName: $("host-name").value,
       offerOnCall: $("offer").checked,
+      listeningChime: $("chime").checked,
       token: token ? token : null,
     });
     $("token").value = "";
@@ -79,8 +85,44 @@ async function ask(app) {
   show("prompt");
 }
 
+// Creates the audio context during a click (a webview may only start audio after one) and loads
+// the chime once. A failure only costs the chime.
+function prepareChime() {
+  try {
+    if (!chime) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      chime = { ctx: new Ctx(), buffer: null };
+      invoke("listening_tone")
+        .then((t) => {
+          const buffer = chime.ctx.createBuffer(1, t.samples.length, t.sample_rate);
+          const data = buffer.getChannelData(0);
+          t.samples.forEach((s, i) => (data[i] = s / INT16_FULL_SCALE));
+          chime.buffer = buffer;
+        })
+        .catch(() => {});
+    }
+    if (chime.ctx.state === "suspended") chime.ctx.resume().catch(() => {});
+  } catch (e) {
+    chime = null;
+  }
+}
+
+function playChime() {
+  if (!chime || !chime.buffer) return;
+  try {
+    const src = chime.ctx.createBufferSource();
+    src.buffer = chime.buffer;
+    src.connect(chime.ctx.destination);
+    src.start();
+  } catch (e) {
+    // The chime is a courtesy; never let it disturb the window.
+  }
+}
+
 async function start() {
   if (!pending || !$("attest").checked) return;
+  prepareChime();
   $("start").disabled = true;
   try {
     const s = await invoke("start_capture", {
@@ -152,6 +194,10 @@ listen("call-ended", () => {
   if (!$("prompt").hidden) show("idle");
 });
 listen("replies", (e) => addReplies(e.payload));
+listen("listening-tone", () => {
+  prepareChime();
+  playChime();
+});
 listen("meeting-ended", () => {
   show("idle");
   status("The meeting ended on your hive. Capture stopped.");

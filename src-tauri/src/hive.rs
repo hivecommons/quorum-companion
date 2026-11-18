@@ -79,6 +79,9 @@ pub struct Replies {
     pub lines: Vec<Line>,
     pub next_seq: i64,
     pub state: String,
+    /// Play Betty's listening chime now (true once per chime; an older hive leaves it out).
+    #[serde(default)]
+    pub tone: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -265,7 +268,11 @@ mod tests {
                 at: String::new()
             }]
         );
+        assert!(!r.tone);
         let empty: Replies = serde_json::from_str(r#"{"next_seq":0,"state":"ended"}"#).unwrap();
         assert!(empty.lines.is_empty());
+        let chime: Replies =
+            serde_json::from_str(r#"{"next_seq":3,"state":"live","tone":true}"#).unwrap();
+        assert!(chime.tone);
     }
 }

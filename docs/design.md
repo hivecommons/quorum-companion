@@ -55,7 +55,7 @@ Hive API (owner or read-write; a companion meeting is usable only by its starter
 1. `GET /api/companion/info`: the consent notice, its version, sample rate, chunk limit.
 2. `POST /api/companion/meetings {title, app, host_name, consent_version, consent_attested: true}`.
 3. `POST /api/companion/meetings/{id}/audio?channel=call|mic&seq=N`: one-second chunks, per channel in order from 0. A 409 with `expected_seq` moves the channel to that seq (the audio in between is lost, never resent out of order). Network errors are retried three times.
-4. `GET /api/companion/meetings/{id}/replies?after=N` every 2 s: Betty's lines and the meeting state; a state other than `live` (for example after "betty leave") stops the capture.
+4. `GET /api/companion/meetings/{id}/replies?after=N` every 2 s: Betty's lines, the meeting state and `tone`; a state other than `live` (for example after "betty leave") stops the capture, and `tone: true` plays the listening chime locally (`src-tauri/src/tone.rs`, the same samples as quorum `src/tone.ts`, through the window's Web Audio on the default output; never into the call).
 5. `POST /api/companion/meetings/{id}/end` on Stop or when the app quits.
 
 Hive relays the PCM to Quorum's `companion` platform, which cuts each channel at silences, transcribes it with the shared Whisper service and feeds Betty's normal live pipeline. Speaker attribution: the `mic` channel is the person, the `call` channel is "Call" (the meeting app mixes everyone else).
