@@ -407,3 +407,72 @@ pub fn run_capture(id: &str) -> ! {
     thread::spawn(run_mic);
     run_call(app.id)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(command: &Command) -> Vec<String> {
+        command
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    fn props(command: &Command) -> Value {
+        let args = args(command);
+        let at = args.iter().position(|a| a == "-P").expect("-P present");
+        serde_json::from_str(&args[at + 1]).expect("-P is JSON")
+    }
+
+    #[test]
+    fn call_recorder_targets_the_app_stream_and_never_falls_back() {
+        let command = pw_record(Some(42), CALL_CHANNELS, "quorum-call");
+        assert_eq!(command.get_program(), "pw-record");
+        let args = args(&command);
+        let at = args.iter().position(|a| a == "--target").unwrap();
+        assert_eq!(args[at + 1], "42");
+        assert_eq!(args.last().map(String::as_str), Some("-"));
+        let props = props(&command);
+        // Without these the session manager could link the recorder to the default
+        // microphone when the app's stream goes away, capturing the wrong audio.
+        assert_eq!(props["node.dont-fallback"], true);
+        assert_eq!(props["node.dont-reconnect"], true);
+        assert_eq!(props["node.dont-move"], true);
+        assert_eq!(props["node.name"], "quorum-call");
+    }
+
+    #[test]
+    fn mic_recorder_has_no_target_and_may_follow_the_default_source() {
+        let command = pw_record(None, MIC_CHANNELS, "quorum-mic");
+        let args = args(&command);
+        assert!(!args.iter().any(|a| a == "--target"));
+        let props = props(&command);
+        assert!(props.get("node.dont-fallback").is_none());
+        assert_eq!(props["node.name"], "quorum-mic");
+    }
+
+    #[test]
+    fn pw_record_asks_for_the_capture_format() {
+        let args = args(&pw_record(None, 1, "n"));
+        let pair = |flag: &str, value: &str| {
+            let at = args.iter().position(|a| a == flag).unwrap();
+            args[at + 1] == value
+        };
+        assert!(pair("--rate", &CAPTURE_RATE.to_string()));
+        assert!(pair("--channels", "1"));
+        assert!(pair("--format", "s16"));
+    }
+
+    #[test]
+    fn parec_passes_the_source_last_in_raw_s16le() {
+        let command = parec(2, "--monitor-stream=7".to_string());
+        assert_eq!(command.get_program(), "parec");
+        let args = args(&command);
+        assert_eq!(args.first().map(String::as_str), Some("--raw"));
+        assert!(args.contains(&"--format=s16le".to_string()));
+        assert!(args.contains(&format!("--rate={CAPTURE_RATE}")));
+        assert!(args.contains(&"--channels=2".to_string()));
+        assert_eq!(args.last().map(String::as_str), Some("--monitor-stream=7"));
+    }
+}
