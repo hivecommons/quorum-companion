@@ -64,8 +64,17 @@ done
 [ "$ready" -eq 1 ] || { echo "FAIL: PipeWire never became ready"; exit 1; }
 pactl info | grep -E 'Server Name|Server Version'
 
-pactl load-module module-null-sink sink_name=ci_sink sink_properties=device.description=ci_sink > /dev/null
-pactl load-module module-null-sink sink_name=ci_mic sink_properties=device.description=ci_mic > /dev/null
+# Virtual sinks made with pw-cli: pipewire-pulse 0.3.48 (22.04) has no module-null-sink.
+for name in ci_sink ci_mic; do
+  pw-cli create-node adapter "{ factory.name=support.null-audio-sink node.name=$name \
+    media.class=Audio/Sink object.linger=true audio.position=[FL FR] \
+    node.description=$name }" > /dev/null
+done
+for _ in $(seq 1 10); do
+  pactl list short sinks | grep -q ci_mic && break
+  sleep 1
+done
+pactl list short sinks
 pactl set-default-sink ci_sink
 pactl set-default-source ci_mic.monitor # silent "microphone": nothing plays into ci_mic
 
