@@ -20,10 +20,10 @@ jobs:
     # The oldest supported Ubuntu LTS runner, so the AppImage runs on older glibc too.
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: npm
@@ -67,7 +67,7 @@ jobs:
           helper=capture/linux/target/x86_64-unknown-linux-gnu/release/quorum-capture
           # No PipeWire on the runner: list still prints one JSON array.
           "$helper" list < /dev/null | python3 -c 'import json, sys; assert isinstance(json.load(sys.stdin), list)'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: quorum-companion-linux-x64
           path: |
@@ -86,7 +86,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
       - name: PipeWire, WirePlumber, pipewire-pulse and the PulseAudio tools
