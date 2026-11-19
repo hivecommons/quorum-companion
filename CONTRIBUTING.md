@@ -10,3 +10,19 @@ Open an issue before large changes. Keep pull requests focused, with tests for n
 - No platform's bot detection is ever bypassed: the companion only reads audio from the person's own meeting app on their own computer.
 
 Ask in the [Hive Commons Discord](https://hivecommons.dev/discord) if in doubt.
+
+## Building locally
+
+The build scripts are the same ones CI runs, so a green local build matches CI. Every OS needs Node 22 and a stable Rust toolchain (`rustup`); the Tauri CLI is installed by `npm ci` from `package.json`. Run `npm ci` once at the repository root first.
+
+- macOS (Apple silicon, 14.2 or later): Xcode command line tools for `swiftc`, then `scripts/build-macos.sh`.
+- Windows (x64): Visual Studio Build Tools with the C++ workload and the WebView2 runtime, then `scripts/build-windows.sh` from Git Bash.
+- Linux (x86_64): the system libraries below, then `scripts/build-linux.sh`.
+
+  ```
+  sudo apt-get install -y --no-install-recommends \
+    build-essential pkg-config file patchelf libfuse2 xdg-utils \
+    libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
+  ```
+
+Each script builds the per-OS capture helper into `src-tauri/binaries/`, generates the icons from `app-icon.png`, then runs `tauri build`. The Rust capture helpers have unit tests: run `cargo test` in `capture/windows` or `capture/linux`.
