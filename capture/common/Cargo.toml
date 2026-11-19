@@ -1,0 +1,8 @@
+[package]
+name = "quorum-capture-common"
+version = "0.2.0"
+description = "Platform-neutral PCM framing and resampler shared by the Linux and Windows capture modules of the Quorum companion"
+license = "Apache-2.0"
+repository = "https://github.com/hivecommons/quorum-companion"
+edition = "2021"
+rust-version = "1.80"
