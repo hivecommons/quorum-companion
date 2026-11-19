@@ -6,7 +6,7 @@ Open an issue before large changes. Keep pull requests focused, with tests for n
 
 - The companion streams to hive's companion API; its contract lives in hive `src/docs/meetings.md` ("Desktop companion") and quorum `docs/contract.md` ("Companion audio"). A change to it changes those docs first.
 - Consent is not optional: nothing may be captured or sent before the person confirmed the participants were told, and the "Betty is listening" indicator stays visible for the whole capture.
-- Capture modules are per OS (`capture/macos`, `capture/windows`, later `capture/linux`) and speak the same frame protocol on stdout (see `src-tauri/src/audio.rs`). They never touch the network.
+- Capture modules are per OS (`capture/macos`, `capture/windows`, `capture/linux`) and speak the same frame protocol on stdout (see `src-tauri/src/audio.rs`). They never touch the network.
 - No platform's bot detection is ever bypassed: the companion only reads audio from the person's own meeting app on their own computer.
 
 Ask in the [Hive Commons Discord](https://hivecommons.dev/discord) if in doubt.
