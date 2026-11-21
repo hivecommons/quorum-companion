@@ -75,8 +75,17 @@ for _ in $(seq 1 10); do
   sleep 1
 done
 pactl list short sinks
-pactl set-default-sink ci_sink
-pactl set-default-source ci_mic.monitor # silent "microphone": nothing plays into ci_mic
+# pipewire-pulse answers "Failure: Not supported" until WirePlumber's default-nodes metadata is up
+# (seen intermittently on 22.04 and 24.04), so poll until the server accepts the setting.
+poll_pactl() {
+  for _ in $(seq 1 20); do
+    pactl "$@" && return 0
+    sleep 1
+  done
+  echo "FAIL: pactl $* never succeeded"; return 1
+}
+poll_pactl set-default-sink ci_sink
+poll_pactl set-default-source ci_mic.monitor # silent "microphone": nothing plays into ci_mic
 
 # Tone players: copies of pacat under meeting app names (pacat's mode is set with flags).
 mkdir "$work/bin"
