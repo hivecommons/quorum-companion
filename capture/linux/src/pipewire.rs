@@ -21,7 +21,8 @@ use serde_json::{json, Value};
 
 use crate::graph::{self, Detector, StreamNode};
 use crate::pcm::{self, Converter};
-use crate::{apps, emit_json, log, shutdown, write_frame};
+use crate::{apps, log, shutdown};
+use quorum_capture_common::stdio::{emit_json, write_frame};
 
 /// How often the graph is polled (detection, and the capture's choice of stream).
 const POLL: Duration = Duration::from_secs(2);

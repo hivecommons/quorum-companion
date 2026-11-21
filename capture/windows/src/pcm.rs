@@ -5,9 +5,7 @@
 //! two or more channels, 44.1 or 48 kHz) or in the format the helper asked for. Each buffer is
 //! downmixed to mono, resampled to 16 kHz and written as one frame.
 
-pub use quorum_capture_common::{
-    frame, to_s16le, Resampler, CHANNEL_CALL, CHANNEL_MIC, TARGET_RATE,
-};
+pub use quorum_capture_common::{to_s16le, Resampler, CHANNEL_CALL, CHANNEL_MIC, TARGET_RATE};
 
 const WAVE_FORMAT_PCM: u16 = 0x0001;
 const WAVE_FORMAT_IEEE_FLOAT: u16 = 0x0003;

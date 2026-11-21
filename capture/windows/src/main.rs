@@ -23,47 +23,7 @@ mod pcm;
 #[cfg(windows)]
 mod wasapi;
 
-use std::io::{self, Read, Write};
-
-fn log(message: &str) {
-    eprintln!("quorum-capture: {message}");
-}
-
-/// Writes one frame or line under the stdout lock, so the call and microphone threads never
-/// interleave.
-fn write_stdout(bytes: &[u8]) {
-    let mut out = io::stdout().lock();
-    if out.write_all(bytes).and_then(|()| out.flush()).is_err() {
-        // The app is gone; never keep capturing alone.
-        std::process::exit(0);
-    }
-}
-
-fn write_frame(channel: u8, pcm: &[u8]) {
-    if !pcm.is_empty() {
-        write_stdout(&pcm::frame(channel, pcm));
-    }
-}
-
-fn emit_json(value: &serde_json::Value) {
-    let mut line = value.to_string();
-    line.push('\n');
-    write_stdout(line.as_bytes());
-}
-
-/// Exits when the parent closes stdin (or dies), so the helper never keeps capturing alone.
-fn exit_when_stdin_closes() {
-    std::thread::spawn(|| {
-        let mut stdin = io::stdin();
-        let mut buf = [0u8; 256];
-        loop {
-            match stdin.read(&mut buf) {
-                Ok(0) | Err(_) => std::process::exit(0),
-                Ok(_) => {}
-            }
-        }
-    });
-}
+use quorum_capture_common::stdio::log;
 
 const USAGE: &str = "usage: quorum-capture detect | list | capture <exe>";
 
@@ -72,12 +32,12 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     match (args.get(1).map(String::as_str), args.get(2)) {
         (Some("detect"), _) => {
-            exit_when_stdin_closes();
+            quorum_capture_common::stdio::exit_when_stdin_closes();
             wasapi::run_detect()
         }
         (Some("list"), _) => wasapi::run_list(),
         (Some("capture"), Some(exe)) => {
-            exit_when_stdin_closes();
+            quorum_capture_common::stdio::exit_when_stdin_closes();
             wasapi::run_capture(exe)
         }
         _ => {

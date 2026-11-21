@@ -5,9 +5,7 @@
 //! at 48 kHz, the usual PipeWire graph rate, so PipeWire does no extra resampling of its own.
 //! The helper downmixes to mono, resamples to 16 kHz and writes each read as one frame.
 
-pub use quorum_capture_common::{
-    frame, to_s16le, Resampler, CHANNEL_CALL, CHANNEL_MIC, TARGET_RATE,
-};
+pub use quorum_capture_common::{to_s16le, Resampler, CHANNEL_CALL, CHANNEL_MIC, TARGET_RATE};
 
 const SAMPLE_BYTES: usize = 2;
 
