@@ -42,8 +42,9 @@ use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
 use windows::Win32::System::Variant::VT_BLOB;
 
 use crate::apps::{self, Detector, Process};
+use crate::log;
 use crate::pcm::{self, Format, Resampler, SampleKind, CHANNEL_CALL, CHANNEL_MIC, TARGET_RATE};
-use crate::{emit_json, log, write_frame};
+use quorum_capture_common::stdio::{emit_json, write_frame};
 
 const POLL: Duration = Duration::from_secs(2);
 const MISSES_TO_END: u32 = 2;

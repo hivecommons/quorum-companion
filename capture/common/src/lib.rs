@@ -2,6 +2,8 @@
 //! the 16 kHz target rate, the channel bytes, s16le encoding, the resampler and the stdout
 //! frame layout. Platform-neutral, shared by the Linux and Windows helpers so they cannot drift.
 
+pub mod stdio;
+
 /// The sample rate the companion streams.
 pub const TARGET_RATE: u32 = 16_000;
 /// Frame channel byte for the meeting app's audio.
