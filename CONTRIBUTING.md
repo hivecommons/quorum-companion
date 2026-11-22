@@ -26,3 +26,7 @@ The build scripts are the same ones CI runs, so a green local build matches CI. 
   ```
 
 Each script builds the per-OS capture helper into `src-tauri/binaries/`, generates the icons from `app-icon.png`, then runs `tauri build`. The Rust capture helpers have unit tests: run `cargo test` in `capture/windows` or `capture/linux`.
+
+## Cargo.lock
+
+Each Rust crate root (`src-tauri`, `capture/linux`, `capture/windows`) should commit its own `Cargo.lock` (not yet committed; tracked in #21) so CI and release builds use pinned, reviewable dependency versions. Never add `Cargo.lock` to `.gitignore`. When you change a `Cargo.toml`, run `cargo generate-lockfile` or `cargo update -p <crate>` in that crate and commit the lockfile diff in the same pull request. Once the lockfiles are committed, CI passes `--locked` to cargo so a drifted lockfile fails fast.
