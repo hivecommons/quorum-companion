@@ -275,4 +275,130 @@ mod tests {
             serde_json::from_str(r#"{"next_seq":3,"state":"live","tone":true}"#).unwrap();
         assert!(chime.tone);
     }
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread::JoinHandle;
+
+    /// Serves one canned `(status, body)` per connection on a loopback port, then returns the raw
+    /// requests it saw (lowercased, so header names compare however the client cases them).
+    fn serve(replies: Vec<(u16, &'static str)>) -> (String, JoinHandle<Vec<String>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+        let handle = std::thread::spawn(move || {
+            let mut seen = Vec::new();
+            for (status, body) in replies {
+                let (mut conn, _) = listener.accept().unwrap();
+                let mut raw = Vec::new();
+                let mut buf = [0u8; 1024];
+                let head_end = loop {
+                    let n = conn.read(&mut buf).unwrap();
+                    raw.extend_from_slice(&buf[..n]);
+                    if let Some(i) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
+                        break i + 4;
+                    }
+                    assert!(n > 0, "client closed before finishing its request head");
+                };
+                let head = String::from_utf8_lossy(&raw[..head_end]).to_lowercase();
+                let want = head
+                    .lines()
+                    .find_map(|l| l.strip_prefix("content-length:"))
+                    .and_then(|v| v.trim().parse::<usize>().ok())
+                    .unwrap_or(0);
+                while raw.len() < head_end + want {
+                    let n = conn.read(&mut buf).unwrap();
+                    assert!(n > 0, "client closed before finishing its request body");
+                    raw.extend_from_slice(&buf[..n]);
+                }
+                seen.push(String::from_utf8_lossy(&raw).to_lowercase());
+                let reply = format!(
+                    "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                conn.write_all(reply.as_bytes()).unwrap();
+            }
+            seen
+        });
+        (base, handle)
+    }
+
+    #[test]
+    fn a_conflict_with_expected_seq_is_a_gap_and_the_request_is_well_formed() {
+        let (base, server) = serve(vec![(409, r#"{"error":"gap","expected_seq":7}"#)]);
+        let hive = Hive::new(&base, " tok ").unwrap();
+        let err = hive.audio("m1", "mic", 3, vec![1, 2, 3, 4]).unwrap_err();
+        assert!(matches!(err, HiveError::Gap { expected: 7 }), "{err:?}");
+        let seen = server.join().unwrap();
+        assert!(
+            seen[0].starts_with("post /api/companion/meetings/m1/audio?channel=mic&seq=3 "),
+            "{}",
+            seen[0]
+        );
+        assert!(seen[0].contains("x-hive-companion-token: tok\r\n"), "{}", seen[0]);
+        assert!(seen[0].contains("content-type: application/octet-stream"));
+        assert!(seen[0].contains("content-length: 4"));
+    }
+
+    #[test]
+    fn other_error_statuses_keep_the_hives_message() {
+        let (base, server) = serve(vec![
+            (403, r#"{"error":"nope"}"#),
+            (409, r#"{"error":"ended"}"#),
+            (500, "<html>boom</html>"),
+        ]);
+        let hive = Hive::new(&base, "tok").unwrap();
+        let denied = hive.info().unwrap_err();
+        assert!(
+            matches!(&denied, HiveError::Status { status: 403, message } if message == "nope"),
+            "{denied:?}"
+        );
+        // A 409 without expected_seq is an ordinary status error, not a gap.
+        let ended = hive.end("m1").unwrap_err();
+        assert!(
+            matches!(&ended, HiveError::Status { status: 409, message } if message == "ended"),
+            "{ended:?}"
+        );
+        // An unreadable error body still reports the status, with an empty message.
+        let boom = hive.end("m1").unwrap_err();
+        assert!(
+            matches!(&boom, HiveError::Status { status: 500, message } if message.is_empty()),
+            "{boom:?}"
+        );
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn replies_never_ask_before_the_start_and_decode_the_answer() {
+        let (base, server) = serve(vec![(
+            200,
+            r#"{"next_seq":5,"state":"live","tone":true,"lines":[{"seq":4,"text":"hi"}]}"#,
+        )]);
+        let hive = Hive::new(&base, "tok").unwrap();
+        let r = hive.replies("m1", -9).unwrap();
+        assert_eq!((r.next_seq, r.tone, r.lines.len()), (5, true, 1));
+        let seen = server.join().unwrap();
+        assert!(
+            seen[0].starts_with("get /api/companion/meetings/m1/replies?after=0 "),
+            "{}",
+            seen[0]
+        );
+    }
+
+    #[test]
+    fn an_unreadable_success_body_is_a_network_error() {
+        let (base, server) = serve(vec![(200, "not json")]);
+        let hive = Hive::new(&base, "tok").unwrap();
+        assert!(matches!(hive.info().unwrap_err(), HiveError::Network(_)));
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn an_unreachable_hive_is_a_network_error() {
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let hive = Hive::new(&format!("http://127.0.0.1:{port}"), "tok").unwrap();
+        assert!(matches!(hive.info().unwrap_err(), HiveError::Network(_)));
+    }
 }
