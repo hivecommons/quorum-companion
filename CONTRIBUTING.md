@@ -6,7 +6,7 @@ Open an issue before large changes. Keep pull requests focused, with tests for n
 
 - The companion streams to hive's companion API; its contract lives in hive `src/docs/meetings.md` ("Desktop companion") and quorum `docs/contract.md` ("Companion audio"). A change to it changes those docs first.
 - Consent is not optional: nothing may be captured or sent before the person confirmed the participants were told, and the "Betty is listening" indicator stays visible for the whole capture.
-- Capture modules are per OS (`capture/macos`, `capture/windows`, `capture/linux`) and speak the same frame protocol on stdout (see `src-tauri/src/audio.rs`). They never touch the network.
+- Capture modules are per OS (`capture/macos`, `capture/windows`, `capture/linux`) and speak the same frame protocol on stdout (see `src-tauri/src/audio.rs`). They never touch the network. Code the Rust helpers share (PCM framing, the resampler, the stdout/stdin plumbing) lives in the platform-neutral `capture/common` crate (`quorum-capture-common`).
 - No platform's bot detection is ever bypassed: the companion only reads audio from the person's own meeting app on their own computer.
 
 Ask in the [Hive Commons Discord](https://hivecommons.dev/discord) if in doubt.
@@ -25,7 +25,7 @@ The build scripts are the same ones CI runs, so a green local build matches CI. 
     libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
   ```
 
-Each script builds the per-OS capture helper into `src-tauri/binaries/`, generates the icons from `app-icon.png`, then runs `tauri build`. The Rust capture helpers have unit tests: run `cargo test` in `capture/windows` or `capture/linux`.
+Each script builds the per-OS capture helper into `src-tauri/binaries/`, generates the icons from `app-icon.png`, then runs `tauri build`. The Rust capture helpers have unit tests: run `cargo test` in `capture/common`, `capture/windows` or `capture/linux`. Testing a helper does not run the shared crate's tests, so run them in `capture/common` whenever you change it.
 
 ## Cargo.lock
 
