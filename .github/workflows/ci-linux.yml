@@ -47,6 +47,14 @@ jobs:
           cargo fmt --check
           cargo clippy --all-targets -- -D warnings
           cargo test
+      # capture/common is a path dependency of both helpers, not a workspace member, so
+      # testing a helper does not run its tests. It is platform-neutral; Linux alone is enough.
+      - name: Rust format, lint and tests (shared capture crate)
+        working-directory: capture/common
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
       - name: Rust format, lint and tests (app)
         working-directory: src-tauri
         run: |
