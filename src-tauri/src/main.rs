@@ -457,9 +457,18 @@ fn start_detector(app: &AppHandle) {
                     let _ = w.set_focus();
                 }
             }
-            let _ = app.emit(&kind.replace('_', "-"), event);
+            if forwards(&kind, offer) {
+                let _ = app.emit(&kind.replace('_', "-"), event);
+            }
         }
     });
+}
+
+/// Whether a detector event reaches the UI. With "Offer to listen when a call
+/// starts" off, `call_started` is dropped so the UI never asks the hive or shows
+/// the consent prompt for a detected call; every other event still flows.
+fn forwards(kind: &str, offer_on_call: bool) -> bool {
+    kind != "call_started" || offer_on_call
 }
 
 fn main() {
@@ -492,4 +501,25 @@ fn main() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::forwards;
+
+    #[test]
+    fn call_started_is_dropped_when_offer_is_off() {
+        assert!(!forwards("call_started", false));
+    }
+
+    #[test]
+    fn call_started_is_forwarded_when_offer_is_on() {
+        assert!(forwards("call_started", true));
+    }
+
+    #[test]
+    fn call_ended_is_always_forwarded() {
+        assert!(forwards("call_ended", false));
+        assert!(forwards("call_ended", true));
+    }
 }
