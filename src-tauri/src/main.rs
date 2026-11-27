@@ -420,6 +420,13 @@ async fn stop_capture(app: AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Whether a detector event reaches the UI. With "Offer to listen when a call
+/// starts" off, a detected call is never offered, so `call_started` is dropped;
+/// every other event (such as `call_ended`) still flows.
+fn should_emit(kind: &str, offer_on_call: bool) -> bool {
+    kind != "call_started" || offer_on_call
+}
+
 /// Runs the helper's `detect` mode and brings the window forward when a call starts.
 fn start_detector(app: &AppHandle) {
     let mut child = match spawn_helper(&["detect"]) {
@@ -450,7 +457,10 @@ fn start_detector(app: &AppHandle) {
             let offer = config_dir(&app)
                 .map(|d| settings::load(&d).offer_on_call)
                 .unwrap_or(true);
-            if kind == "call_started" && offer {
+            if !should_emit(&kind, offer) {
+                continue;
+            }
+            if kind == "call_started" {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.show();
                     let _ = w.unminimize();
@@ -492,4 +502,22 @@ fn main() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_emit;
+
+    #[test]
+    fn call_started_is_dropped_when_offer_is_off() {
+        assert!(!should_emit("call_started", false));
+        assert!(should_emit("call_started", true));
+    }
+
+    #[test]
+    fn other_events_flow_regardless_of_offer() {
+        assert!(should_emit("call_ended", false));
+        assert!(should_emit("call_ended", true));
+        assert!(should_emit("error", false));
+    }
 }
