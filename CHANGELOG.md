@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- With "Offer to listen when a call starts" off, a detected call no longer contacts the hive or shows the consent prompt. Manual start still works ([#30](https://github.com/hivecommons/quorum-companion/issues/30)).
+
 ## 0.2.0
 
 - Betty's listening chime: when the hive's replies say `tone`, the companion plays the same soft two-note chime as quorum (`src/tone.ts`) on this computer's default output, never into the call. A new setting, "Play Betty's listening chime" (on by default), turns it off. Needs a hive with Quorum v0.6.0 or later (hive PRs hivecommons/hive#19116 and #19121 on v5) ([#12](https://github.com/hivecommons/quorum-companion/issues/12)).
