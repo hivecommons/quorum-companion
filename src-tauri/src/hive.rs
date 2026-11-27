@@ -124,6 +124,8 @@ impl Hive {
         let http = Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .https_only(!base.starts_with("http://"))
+            // The companion API never redirects, and reqwest would copy the token header onto one.
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|e| HiveError::Config(e.to_string()))?;
         Ok(Hive {
@@ -393,6 +395,44 @@ mod tests {
         let hive = Hive::new(&base, "tok").unwrap();
         assert!(matches!(hive.info().unwrap_err(), HiveError::Network(_)));
         server.join().unwrap();
+    }
+
+    #[test]
+    fn a_redirect_is_not_followed_so_the_token_stays_on_the_hive() {
+        let elsewhere = TcpListener::bind("127.0.0.1:0").unwrap();
+        elsewhere.set_nonblocking(true).unwrap();
+        let target = format!(
+            "http://127.0.0.1:{}/steal",
+            elsewhere.local_addr().unwrap().port()
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+        let server = std::thread::spawn(move || {
+            let (mut conn, _) = listener.accept().unwrap();
+            let mut raw = Vec::new();
+            let mut buf = [0u8; 1024];
+            while !raw.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = conn.read(&mut buf).unwrap();
+                assert!(n > 0, "client closed before finishing its request head");
+                raw.extend_from_slice(&buf[..n]);
+            }
+            let reply = format!(
+                "HTTP/1.1 302 Found\r\nLocation: {target}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            );
+            conn.write_all(reply.as_bytes()).unwrap();
+        });
+        let hive = Hive::new(&base, "tok").unwrap();
+        let err = hive.info().unwrap_err();
+        assert!(
+            matches!(err, HiveError::Status { status: 302, .. }),
+            "{err:?}"
+        );
+        server.join().unwrap();
+        assert_eq!(
+            elsewhere.accept().map(|_| ()).unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock,
+            "the redirect target was contacted"
+        );
     }
 
     #[test]
