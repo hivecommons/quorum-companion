@@ -4,6 +4,7 @@
 
 - With "Offer to listen when a call starts" off, a detected call no longer contacts the hive or shows the consent prompt. Manual start still works ([#30](https://github.com/hivecommons/quorum-companion/issues/30)).
 - The companion no longer follows redirects from the hive, so a 3xx cannot send the companion token to another host; it shows as a hive error instead ([#32](https://github.com/hivecommons/quorum-companion/issues/32)).
+- Starting to listen twice in quick succession (for example re-ticking "everyone was told" while a start is still in progress) is now refused instead of leaving one capture recording after Stop ([#35](https://github.com/hivecommons/quorum-companion/issues/35)).
 
 ## 0.2.0
 
