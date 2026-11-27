@@ -25,7 +25,7 @@ The build scripts are the same ones CI runs, so a green local build matches CI. 
     libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
   ```
 
-Each script builds the per-OS capture helper into `src-tauri/binaries/`, generates the icons from `app-icon.png`, then runs `tauri build`. The Rust capture helpers have unit tests: run `cargo test` in `capture/common`, `capture/windows` or `capture/linux`. Testing a helper does not run the shared crate's tests, so run them in `capture/common` whenever you change it.
+Each script builds the per-OS capture helper into `src-tauri/binaries/`, generates the icons from `app-icon.png`, then runs `tauri build`. The app crate and the Rust capture helpers have unit tests: run `cargo test` in `src-tauri`, `capture/common`, `capture/windows` or `capture/linux`. Testing a helper does not run the shared crate's tests, so run them in `capture/common` whenever you change it. CI runs `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` before `cargo test` in each crate it tests, so run both in every crate you change before you push.
 
 ## Cargo.lock
 
