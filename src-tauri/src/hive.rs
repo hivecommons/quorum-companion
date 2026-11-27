@@ -333,7 +333,11 @@ mod tests {
             "{}",
             seen[0]
         );
-        assert!(seen[0].contains("x-hive-companion-token: tok\r\n"), "{}", seen[0]);
+        assert!(
+            seen[0].contains("x-hive-companion-token: tok\r\n"),
+            "{}",
+            seen[0]
+        );
         assert!(seen[0].contains("content-type: application/octet-stream"));
         assert!(seen[0].contains("content-length: 4"));
     }
