@@ -59,7 +59,27 @@ struct Session {
 #[derive(Default)]
 struct AppState {
     session: Mutex<Option<Session>>,
+    /// Set while a start is in flight, from `start_capture` until `start_blocking` returns, so
+    /// overlapping starts cannot each spawn a helper and orphan one of them.
+    starting: Arc<AtomicBool>,
     detector: Mutex<Option<(Child, Option<ChildStdin>)>>,
+}
+
+/// Holds the start slot; releases it when dropped, on every exit from a start.
+struct StartGuard(Arc<AtomicBool>);
+
+impl Drop for StartGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
+
+/// Claims the start slot, or `None` when another start is already in flight.
+fn reserve_start(starting: &Arc<AtomicBool>) -> Option<StartGuard> {
+    starting
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .ok()
+        .map(|_| StartGuard(starting.clone()))
 }
 
 #[derive(Clone, Serialize)]
@@ -214,14 +234,20 @@ async fn start_capture(
     if !consent_attested {
         return Err("confirm that everyone in the call was told and agreed".into());
     }
-    {
+    let guard = {
         let state = app.state::<AppState>();
+        let Some(guard) = reserve_start(&state.starting) else {
+            return Err("Betty is already listening to a call".into());
+        };
         if state.session.lock().map_err(|e| e.to_string())?.is_some() {
             return Err("Betty is already listening to a call".into());
         }
-    }
+        guard
+    };
     let handle = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        // Held until the session is stored or the start fails.
+        let _guard = guard;
         start_blocking(handle, bundle_id, app_name, title, consent_version)
     })
     .await
@@ -506,7 +532,18 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::should_emit;
+    use super::{reserve_start, should_emit};
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    #[test]
+    fn a_second_start_is_refused_while_one_is_in_flight() {
+        let starting = Arc::new(AtomicBool::new(false));
+        let first = reserve_start(&starting).expect("first start reserves the slot");
+        assert!(reserve_start(&starting).is_none());
+        drop(first);
+        assert!(reserve_start(&starting).is_some());
+    }
 
     #[test]
     fn call_started_is_dropped_when_offer_is_off() {

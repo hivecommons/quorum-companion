@@ -120,8 +120,11 @@ function playChime() {
   }
 }
 
+let starting = false;
+
 async function start() {
-  if (!pending || !$("attest").checked) return;
+  if (starting || !pending || !$("attest").checked) return;
+  starting = true;
   prepareChime();
   $("start").disabled = true;
   try {
@@ -136,6 +139,8 @@ async function start() {
   } catch (e) {
     status(String(e));
     $("start").disabled = false;
+  } finally {
+    starting = false;
   }
 }
 
@@ -172,7 +177,10 @@ $("manual-start").addEventListener("click", () => {
   const opt = $("apps").selectedOptions[0];
   if (opt) ask({ bundle_id: opt.value, app: opt.dataset.app, name: opt.textContent });
 });
-$("attest").addEventListener("change", () => ($("start").disabled = !$("attest").checked));
+$("attest").addEventListener(
+  "change",
+  () => ($("start").disabled = starting || !$("attest").checked),
+);
 $("start").addEventListener("click", start);
 $("dismiss").addEventListener("click", () => {
   pending = null;
